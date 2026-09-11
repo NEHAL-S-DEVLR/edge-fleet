@@ -7,8 +7,6 @@
 import type { SimulationState, NodeId, Task } from "@/lib/types";
 import { logMessage } from "@/lib/state/store";
 
-let taskCounter = 0;
-
 function randomWalkableNode(state: SimulationState): NodeId {
   const nodes = state.warehouse.nodes;
   return nodes[Math.floor(Math.random() * nodes.length)].id;
@@ -22,13 +20,13 @@ export function createTask(state: SimulationState, pickup?: NodeId, dropoff?: No
     d = randomWalkableNode(state);
     guard++;
   }
-  taskCounter += 1;
+  state._taskCounter += 1;
   // Urgent tasks (STAT medication, a stalled production cell, a time-critical
   // container move) are randomly assigned by state.urgencyRatio when not
   // specified explicitly — see auction.ts for how urgency affects bidding order.
   const isUrgent = urgent !== undefined ? urgent : Math.random() < (state.urgencyRatio ?? 0);
   const task: Task = {
-    id: `t${taskCounter}`,
+    id: `t${state._taskCounter}`,
     pickup: p,
     dropoff: d,
     status: "announced",

@@ -3,6 +3,19 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { StatePayload } from "@/lib/types";
 
+export interface NaturalLanguageTaskResult {
+  ok: boolean;
+  error?: string;
+  parsed?: {
+    usedLLM: boolean;
+    model?: string;
+    pickupLabel: string;
+    dropoffLabel: string;
+    urgent: boolean;
+    note?: string;
+  };
+}
+
 interface UseSimResult {
   state: StatePayload | null;
   connected: boolean;
@@ -14,6 +27,7 @@ interface UseSimResult {
   killRobot: (id: string) => void;
   reviveRobot: (id: string) => void;
   addTask: () => void;
+  addNaturalLanguageTask: (text: string) => Promise<NaturalLanguageTaskResult>;
 }
 
 async function post(path: string) {
@@ -96,6 +110,32 @@ export function useSimulationSocket(): UseSimResult {
   const addTask = useCallback(() => {
     fetch("/api/tasks", { method: "POST" }).catch(() => {});
   }, []);
+  const addNaturalLanguageTask = useCallback(async (text: string): Promise<NaturalLanguageTaskResult> => {
+    try {
+      const res = await fetch("/api/tasks/natural-language", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      const body = await res.json();
+      if (!res.ok) return { ok: false, error: body.error ?? `request failed (${res.status})` };
+      return { ok: true, parsed: body.parsed };
+    } catch {
+      return { ok: false, error: "could not reach the fleet server" };
+    }
+  }, []);
 
-  return { state, connected, start, pause, reset, killTaskServer, reviveTaskServer, killRobot, reviveRobot, addTask };
+  return {
+    state,
+    connected,
+    start,
+    pause,
+    reset,
+    killTaskServer,
+    reviveTaskServer,
+    killRobot,
+    reviveRobot,
+    addTask,
+    addNaturalLanguageTask,
+  };
 }

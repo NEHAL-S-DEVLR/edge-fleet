@@ -4,16 +4,25 @@
 // conflict-resolution rule, and calls into taskServer/auction — it never
 // picks a task winner itself (auction.ts does, per-robot) and it never
 // tells a healthy robot where to go (robot.ts does, from its own bids).
-// Delete this file's central loop and replace it with N separate robot
-// processes each running their own copy of resolveConflicts() against
-// intents received over a real socket, and the coordination logic itself
-// (auction.ts, robot.ts) doesn't need to change — that's the intended
-// next step past this single-process prototype (see docs/).
+//
+// This used to say "delete this file's central loop and replace it with N
+// separate robot processes... that's the intended next step." That step is
+// now built — see lib/transport/coordinator.ts and agents/robotAgent.ts.
+// The auction winner rule (pickWinningBid) and the movement conflict rule
+// (resolveMovementConflicts) are pure functions shared verbatim between
+// this in-process tick loop and the real UDP transport, so both paths are
+// provably running the identical algorithm, not two implementations that
+// could drift. This file remains the simpler, lower-latency default the
+// live dashboard uses; the UDP path is for proving FR2 literally (see
+// docs/DISTRIBUTED_TRANSPORT.md) — a demo mode, not a dashboard swap-in,
+// because a real network round-trip per tick isn't worth paying for when
+// nothing here actually needs to lie to itself about being on one machine.
 import type { SimulationState, NodeId } from "@/lib/types";
 import { maybeAnnounceTask } from "@/lib/simulation/taskServer";
 import { runAuctions } from "@/lib/simulation/auction";
 import { planPathTo, publishIntent, applyMove, registerYield } from "@/lib/simulation/robot";
 import { pathLength } from "@/lib/simulation/pathfinding";
+import { resolveMovementConflicts } from "@/lib/simulation/conflicts";
 import { MessageBus } from "@/lib/simulation/messageBus";
 import { logMessage, getStore } from "@/lib/state/store";
 import { recomputeMetrics } from "@/lib/simulation/metrics";
@@ -133,44 +142,7 @@ function resolveMovement(state: SimulationState, bus: MessageBus) {
     if (!movingIds.has(r.id)) staticOccupied.add(r.node);
   }
 
-  const blocked = new Set<string>();
-
-  // head-on swaps: A -> B while B -> A on a single edge
-  for (const i of intents) {
-    if (blocked.has(i.robotId)) continue;
-    const opposite = intents.find((j) => j.robotId !== i.robotId && j.fromNode === i.toNode && j.toNode === i.fromNode);
-    if (opposite) {
-      const rA = robotsById.get(i.robotId)!;
-      const rB = robotsById.get(opposite.robotId)!;
-      const loser =
-        rA.waitTicks === rB.waitTicks ? (rA.id > rB.id ? rA : rB) : rA.waitTicks < rB.waitTicks ? rA : rB;
-      blocked.add(loser.id);
-    }
-  }
-
-  // same-target conflicts, and targets that are statically occupied
-  const byTarget = new Map<NodeId, typeof intents>();
-  for (const i of intents) {
-    if (!byTarget.has(i.toNode)) byTarget.set(i.toNode, []);
-    byTarget.get(i.toNode)!.push(i);
-  }
-  for (const [target, list] of byTarget) {
-    if (staticOccupied.has(target)) {
-      for (const i of list) blocked.add(i.robotId);
-      continue;
-    }
-    if (list.length > 1) {
-      let winner = list[0];
-      for (const i of list) {
-        const r = robotsById.get(i.robotId)!;
-        const w = robotsById.get(winner.robotId)!;
-        if (r.waitTicks > w.waitTicks || (r.waitTicks === w.waitTicks && i.robotId < winner.robotId)) {
-          winner = i;
-        }
-      }
-      for (const i of list) if (i.robotId !== winner.robotId) blocked.add(i.robotId);
-    }
-  }
+  const blocked = resolveMovementConflicts(intents, (robotId) => robotsById.get(robotId)?.waitTicks ?? 0, staticOccupied);
 
   let collisionsThisTick = 0;
   for (const i of intents) {

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useSimulationSocket } from "@/hooks/useSimulationSocket";
 import { TopBar } from "@/components/dashboard/TopBar";
+import { NaturalLanguageBar } from "@/components/dashboard/NaturalLanguageBar";
 import { FleetPanel } from "@/components/dashboard/FleetPanel";
 import { WarehouseCanvas } from "@/components/dashboard/WarehouseCanvas";
 import { TaskPanel } from "@/components/dashboard/TaskPanel";
@@ -39,6 +40,8 @@ export default function Page() {
         onAddTask={sim.addTask}
         onHowItWorks={() => setHowItWorks(true)}
       />
+
+      <NaturalLanguageBar onSubmit={sim.addNaturalLanguageTask} />
 
       <div className="flex-1 grid grid-cols-[240px_1fr_320px] min-h-0">
         <div className="border-r border-line min-h-0">

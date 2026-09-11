@@ -52,6 +52,16 @@ export function buildWarehouse(options: WarehouseOptions = {}): Warehouse {
   const nodes: WarehouseNode[] = [];
   const idOf = new Map<string, NodeId>();
 
+  // Sequential per-kind counters that turn each dock/charge/chokepoint node
+  // into a name a person would actually say ("Dock A", "Charge Bay 2",
+  // "Zone 5") instead of a raw node id. Scanned in row-major (top-to-bottom,
+  // left-to-right) order so labels read left-to-right along the floor the
+  // same way a human would walk it. Plain aisle nodes are too numerous
+  // (dozens per floor) to be worth naming and are left unlabeled.
+  let dockCount = 0;
+  let chargeCount = 0;
+  let zoneCount = 0;
+
   let id = 0;
   for (let y = 0; y < rows; y++) {
     for (let x = 0; x < cols; x++) {
@@ -61,7 +71,20 @@ export function buildWarehouse(options: WarehouseOptions = {}): Warehouse {
       if (isIntersection) kind = "chokepoint";
       const station = edgeStationKind(x, y);
       if (station) kind = station;
-      nodes.push({ id, x, y, kind });
+
+      let label: string | undefined;
+      if (kind === "dock") {
+        label = `Dock ${String.fromCharCode(65 + (dockCount % 26))}`;
+        dockCount++;
+      } else if (kind === "charge") {
+        chargeCount++;
+        label = `Charge Bay ${chargeCount}`;
+      } else if (kind === "chokepoint") {
+        zoneCount++;
+        label = `Zone ${zoneCount}`;
+      }
+
+      nodes.push({ id, x, y, kind, label });
       idOf.set(`${x},${y}`, id);
       id++;
     }
@@ -86,6 +109,31 @@ export function buildWarehouse(options: WarehouseOptions = {}): Warehouse {
   }
 
   return { cols, rows, nodes, edges, adjacency };
+}
+
+/** A named node, for feeding the LLM task parser a location gazetteer and
+ * for the dashboard to show something better than "@42". Only named nodes
+ * (dock/charge/chokepoint) are included — see label assignment above. */
+export interface NamedLocation {
+  id: NodeId;
+  label: string;
+  kind: WarehouseNode["kind"];
+}
+
+export function namedLocations(w: Warehouse): NamedLocation[] {
+  return w.nodes
+    .filter((n): n is WarehouseNode & { label: string } => !!n.label)
+    .map((n) => ({ id: n.id, label: n.label, kind: n.kind }));
+}
+
+/** Case-insensitive, punctuation-loose lookup: "dock a", "Dock-A", "DOCK A"
+ * all resolve to the same node. Used by both the rule-based fallback parser
+ * and to sanity-check whatever a real LLM comes back with (see lib/llm/taskParser.ts). */
+export function findLocationByLabel(w: Warehouse, text: string): NamedLocation | undefined {
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const target = norm(text);
+  if (!target) return undefined;
+  return namedLocations(w).find((loc) => norm(loc.label) === target);
 }
 
 export const ROBOT_COLORS = [
@@ -210,5 +258,6 @@ export function createInitialState(options: CreateStateOptions = {}): Simulation
     _bucketTicks: 0,
     _bucketCompleted: 0,
     _justCompleted: 0,
+    _taskCounter: 0,
   };
 }

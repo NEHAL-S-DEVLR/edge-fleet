@@ -2,22 +2,45 @@
 // robot object it's given (plus the static warehouse graph) — it never
 // reaches into `state.robots` to peek at anyone else. Anything a robot
 // needs to know about its neighbors arrives through the MessageBus.
-import type { Robot, SimulationState, Task, NodeId } from "@/lib/types";
+//
+// bidCost() and planPath() below take a bare (warehouse, node, ...) signature
+// rather than the full SimulationState/Robot/Task objects on purpose: it's
+// what lets a robot's decision genuinely run in a separate OS process (see
+// agents/robotAgent.ts) and call the EXACT SAME function real distributed
+// agents would — no reimplementation, no risk of the two transports
+// (in-process MessageBus vs. real UDP, lib/transport/) drifting apart on
+// what "the algorithm" actually is. computeBidCost()/planPathTo() are the
+// in-process convenience wrappers the tick engine itself uses.
+import type { Robot, SimulationState, Task, NodeId, Warehouse } from "@/lib/types";
 import { findPath, pathLength } from "@/lib/simulation/pathfinding";
 import type { MessageBus } from "@/lib/simulation/messageBus";
 
-/** Cost a robot bids for a task: travel distance to pickup, penalized for low battery. */
-export function computeBidCost(state: SimulationState, robot: Robot, task: Task): number {
-  const dist = pathLength(state.warehouse, robot.node, task.pickup);
+/** Cost to bid on a task pickup: travel distance, penalized for low battery.
+ * Pure function of the warehouse graph + one robot's own public state — the
+ * same inputs a robot on its own hardware would actually have. */
+export function bidCost(warehouse: Warehouse, robotNode: NodeId, robotBattery: number, taskPickup: NodeId): number {
+  const dist = pathLength(warehouse, robotNode, taskPickup);
   if (!Number.isFinite(dist)) return Infinity;
-  const batteryPenalty = (100 - robot.battery) * 0.15;
+  const batteryPenalty = (100 - robotBattery) * 0.15;
   return dist + batteryPenalty;
 }
 
+/** A* path from a node to a destination, INCLUDING neither... — actually
+ * excludes the starting node (see findPath's own doc: it includes start);
+ * this trims it so the result is "remaining hops," matching Robot.path's
+ * contract (path[0] is the next hop, not the current node). */
+export function planPath(warehouse: Warehouse, fromNode: NodeId, dest: NodeId): NodeId[] {
+  const full = findPath(warehouse, fromNode, dest);
+  return full.slice(1);
+}
+
+/** Cost a robot bids for a task: travel distance to pickup, penalized for low battery. */
+export function computeBidCost(state: SimulationState, robot: Robot, task: Task): number {
+  return bidCost(state.warehouse, robot.node, robot.battery, task.pickup);
+}
+
 export function planPathTo(state: SimulationState, robot: Robot, dest: NodeId) {
-  const full = findPath(state.warehouse, robot.node, dest);
-  // full[0] is the robot's current node — drop it, path holds only remaining hops
-  robot.path = full.slice(1);
+  robot.path = planPath(state.warehouse, robot.node, dest);
 }
 
 /**

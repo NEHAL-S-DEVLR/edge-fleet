@@ -7,7 +7,8 @@
     "dev": "tsx server.ts",
     "build": "next build",
     "start": "cross-env NODE_ENV=production tsx server.ts",
-    "lint": "next lint"
+    "lint": "next lint",
+    "demo:distributed": "tsx scripts/distributed-demo.ts"
   },
   "dependencies": {
     "next": "14.2.5",

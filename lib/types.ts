@@ -9,6 +9,12 @@ export interface WarehouseNode {
   x: number; // grid column
   y: number; // grid row
   kind: "aisle" | "chokepoint" | "dock" | "charge";
+  /** Human-readable name ("Dock A", "Charge Bay 2", "Zone 5") for dock/charge/
+   * chokepoint nodes — set by buildWarehouse(), see labelWarehouseNodes().
+   * Plain aisle nodes are too numerous to be worth naming and stay undefined.
+   * This is what lets a person (or an LLM parsing free text) say "bring it
+   * to Dock B" instead of "node 42". */
+  label?: string;
 }
 
 export interface WarehouseEdge {
@@ -154,6 +160,15 @@ export interface SimulationState {
   _bucketTicks: number;
   _bucketCompleted: number;
   _justCompleted: number;
+
+  /** Monotonic task-id counter, kept ON the state object (not a module-level
+   * `let`) so it survives Next.js dev-mode module reloading: server.ts (run
+   * through tsx, its own module graph) and app/api/*\/route.ts (compiled by
+   * Next's own SWC/webpack pipeline) can each get a separate instance of
+   * taskServer.ts, and a plain module-scoped counter would silently reset
+   * in one of them and hand out duplicate task ids. See lib/state/store.ts's
+   * globalThis comment for the same class of bug on the store itself. */
+  _taskCounter: number;
 }
 
 /** Snapshot sent to the browser over WS/HTTP — trims log history to keep payloads small. */
