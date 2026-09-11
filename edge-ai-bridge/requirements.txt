@@ -1,0 +1,7 @@
+opencv-python-headless==4.10.0.84
+numpy==1.26.4
+requests==2.32.3
+Pillow==10.4.0
+# Optional — only needed if you swap in a real ONNX model with --model.
+# Uncomment and install if you have one (e.g. a quantized YOLOv8n/MobileNet-SSD export).
+# onnxruntime==1.18.1

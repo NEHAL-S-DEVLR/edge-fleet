@@ -1,0 +1,7 @@
+node_modules/
+.next/
+out/
+.env
+*.log
+edge-ai-bridge/__pycache__/
+edge-ai-bridge/.venv/
