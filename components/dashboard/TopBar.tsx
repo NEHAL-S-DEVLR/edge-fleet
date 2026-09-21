@@ -2,12 +2,14 @@
 
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { ScenarioPicker } from "@/components/dashboard/ScenarioPicker";
 
 export function TopBar({
   running,
   connected,
   tick,
   taskServerAlive,
+  scenarioKey,
   onStart,
   onPause,
   onReset,
@@ -20,9 +22,10 @@ export function TopBar({
   connected: boolean;
   tick: number;
   taskServerAlive: boolean;
+  scenarioKey: string | null;
   onStart: () => void;
   onPause: () => void;
-  onReset: () => void;
+  onReset: (scenarioKey?: string) => void;
   onKillTaskServer: () => void;
   onReviveTaskServer: () => void;
   onAddTask: () => void;
@@ -36,6 +39,7 @@ export function TopBar({
       </div>
       <Badge tone={running ? "good" : "neutral"}>{running ? "Running" : "Paused"}</Badge>
       <span className="font-mono text-xs text-[#8b8677]">tick {tick}</span>
+      <ScenarioPicker activeKey={scenarioKey} onSelect={(key) => onReset(key)} />
       <div className="flex-1" />
       <Button variant="quiet" onClick={onAddTask}>
         + Inject Task
@@ -43,7 +47,7 @@ export function TopBar({
       <Button variant={taskServerAlive ? "danger" : "primary"} onClick={taskServerAlive ? onKillTaskServer : onReviveTaskServer}>
         {taskServerAlive ? "Kill Task Server" : "Revive Task Server"}
       </Button>
-      <Button variant="ghost" onClick={onReset}>
+      <Button variant="ghost" onClick={() => onReset(scenarioKey ?? undefined)} title="Reset the current scenario back to tick 0">
         Reset
       </Button>
       {running ? (

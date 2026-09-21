@@ -13,6 +13,7 @@ export function toPayload(state: SimulationState): StatePayload {
     edgeInference: state.edgeInference.slice(-20),
     metrics: state.metrics,
     heat: state.heat,
+    scenarioKey: state.scenarioKey,
   };
 }
 

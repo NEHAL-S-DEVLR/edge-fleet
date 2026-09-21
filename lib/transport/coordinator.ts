@@ -65,6 +65,20 @@ export interface CoordinatorOptions extends CreateStateOptions {
    * Real localhost UDP round-trips land in low single-digit ms; this is
    * generous headroom, not a bottleneck the demo is straining against. */
   responseWindowMs?: number;
+  /** Probability (0-1) that any single datagram — either direction — is
+   * simulated as lost in transit and never delivered. 0 (the default)
+   * leaves real localhost UDP's near-zero loss rate untouched. This is the
+   * PRD's "packet-loss injection" nice-to-have, applied at the coordinator's
+   * socket boundary rather than the OS, so it works identically on any
+   * machine without touching firewall/tc rules. */
+  packetLossRate?: number;
+  /** Fixed one-way delay (ms) added before a datagram is actually sent or
+   * processed, simulating a real network hop instead of localhost's
+   * sub-millisecond latency. 0 by default. */
+  latencyMs?: number;
+  /** Extra random delay (0..latencyJitterMs) added on top of latencyMs per
+   * datagram, so injected latency isn't perfectly uniform. */
+  latencyJitterMs?: number;
   onTick?: (state: SimulationState, wire: WireStats) => void;
   onLog?: (line: string) => void;
 }
@@ -74,6 +88,19 @@ export interface WireStats {
   datagramsReceived: number;
   bidsThisTick: number;
   intentsThisTick: number;
+  /** Cumulative datagrams (either direction) simulated as lost by
+   * packetLossRate — never sent/processed at all. */
+  datagramsDropped: number;
+  /** How many of those drops happened in this tick specifically. */
+  droppedThisTick: number;
+  /** How many datagrams this tick were delayed (latencyMs/latencyJitterMs)
+   * rather than delivered immediately — not dropped, just late; a late
+   * enough bid/intent can still miss its tick's responseWindowMs and get
+   * discarded when the next tick resets the in-flight buffers, which is
+   * the real, checkable mechanism by which added latency degrades outcomes
+   * (fewer bids counted, fewer intents resolved) rather than a cosmetic
+   * number. */
+  delayedThisTick: number;
 }
 
 export class DistributedCoordinator {
@@ -89,6 +116,12 @@ export class DistributedCoordinator {
   private onLog: (line: string) => void;
   private totalSent = 0;
   private totalReceived = 0;
+  private totalDropped = 0;
+  private droppedThisTick = 0;
+  private delayedThisTick = 0;
+  private packetLossRate: number;
+  private latencyMs: number;
+  private latencyJitterMs: number;
   private inFlightBids: BidMsg[] = [];
   private inFlightIntents: IntentMsg[] = [];
   private listening = false;
@@ -106,6 +139,9 @@ export class DistributedCoordinator {
     this.tickMs = opts.tickMs ?? 300;
     this.responseWindowMs = opts.responseWindowMs ?? Math.min(120, this.tickMs / 2);
     this.livenessTimeoutMs = opts.tickMs ? Math.max(2000, this.tickMs * 8) : 2400;
+    this.packetLossRate = Math.max(0, Math.min(1, opts.packetLossRate ?? 0));
+    this.latencyMs = Math.max(0, opts.latencyMs ?? 0);
+    this.latencyJitterMs = Math.max(0, opts.latencyJitterMs ?? 0);
     this.onTick = opts.onTick;
     this.onLog = opts.onLog ?? (() => {});
     this.socket = dgram.createSocket("udp4");
@@ -133,13 +169,39 @@ export class DistributedCoordinator {
   }
 
   private send(port: number, msg: AnyMsg) {
-    this.totalSent++;
-    this.socket.send(encode(msg), port, "127.0.0.1");
+    this.degrade(() => {
+      this.totalSent++;
+      this.socket.send(encode(msg), port, "127.0.0.1");
+    });
+  }
+
+  /** Applies --packet-loss / --latency-ms degradation to one datagram,
+   * outbound or inbound alike — see CoordinatorOptions. A "dropped"
+   * datagram never runs `action` at all (the same as if it never arrived);
+   * an undelayed one runs synchronously so real localhost UDP's behavior
+   * is unchanged when neither flag is set. */
+  private degrade(action: () => void) {
+    if (this.packetLossRate > 0 && Math.random() < this.packetLossRate) {
+      this.totalDropped++;
+      this.droppedThisTick++;
+      return;
+    }
+    const delay = this.latencyMs + (this.latencyJitterMs > 0 ? Math.random() * this.latencyJitterMs : 0);
+    if (delay <= 0) {
+      action();
+      return;
+    }
+    this.delayedThisTick++;
+    setTimeout(action, delay);
   }
 
   private handleDatagram(buf: Buffer) {
     const msg = decode(buf);
     if (!msg) return;
+    this.degrade(() => this.processInbound(msg));
+  }
+
+  private processInbound(msg: AnyMsg) {
     this.totalReceived++;
     switch (msg.type) {
       case "register": {
@@ -196,6 +258,8 @@ export class DistributedCoordinator {
     const state = this.state;
     state.tick += 1;
     state._justCompleted = 0;
+    this.droppedThisTick = 0;
+    this.delayedThisTick = 0;
 
     maybeAnnounceTask(state);
     this.evictUnresponsiveAgents();
@@ -302,6 +366,9 @@ export class DistributedCoordinator {
       datagramsReceived: this.totalReceived,
       bidsThisTick: bids.length,
       intentsThisTick: intents.length,
+      datagramsDropped: this.totalDropped,
+      droppedThisTick: this.droppedThisTick,
+      delayedThisTick: this.delayedThisTick,
     });
   }
 

@@ -201,6 +201,9 @@ export interface CreateStateOptions extends WarehouseOptions {
   taskMinGap?: number;
   taskMaxGap?: number;
   maxOpenTasks?: number;
+  /** Which named preset (lib/simulation/scenarios.ts) this state was built
+   * from, purely for display — never read by the engine. */
+  scenarioKey?: string | null;
 }
 
 export function createInitialState(options: CreateStateOptions = {}): SimulationState {
@@ -252,6 +255,7 @@ export function createInitialState(options: CreateStateOptions = {}): Simulation
     maxOpenTasks: options.maxOpenTasks ?? DEFAULT_MAX_OPEN,
 
     heat: {},
+    scenarioKey: options.scenarioKey ?? null,
 
     throughput: [],
     _bucketSize: 20,

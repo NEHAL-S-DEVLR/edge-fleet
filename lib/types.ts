@@ -148,6 +148,11 @@ export interface SimulationState {
   taskMinGap: number;
   taskMaxGap: number;
   maxOpenTasks: number;
+  /** Which named preset (see lib/simulation/scenarios.ts) this run was booted/reset
+   * into, or null for the plain, unlabeled default. Purely descriptive — never read
+   * by the engine — it only lets the dashboard show "Hospital logistics" instead of
+   * a generic fleet, and lets a scenario picker highlight the active choice. */
+  scenarioKey: string | null;
 
   // --- congestion heat map: nodeId -> heat, bumped on blocked moves / contended
   // idle cells, decayed a little every tick. Purely a metrics/visualization signal —
@@ -183,4 +188,5 @@ export interface StatePayload {
   edgeInference: EdgeInferenceReading[];
   metrics: MetricsSnapshot;
   heat: Record<NodeId, number>;
+  scenarioKey: string | null;
 }

@@ -21,7 +21,7 @@ interface UseSimResult {
   connected: boolean;
   start: () => void;
   pause: () => void;
-  reset: () => void;
+  reset: (scenarioKey?: string) => void;
   killTaskServer: () => void;
   reviveTaskServer: () => void;
   killRobot: (id: string) => void;
@@ -30,9 +30,14 @@ interface UseSimResult {
   addNaturalLanguageTask: (text: string) => Promise<NaturalLanguageTaskResult>;
 }
 
-async function post(path: string) {
+async function post(path: string, body?: unknown) {
   try {
-    await fetch(path, { method: "POST" });
+    await fetch(path, {
+      method: "POST",
+      ...(body !== undefined
+        ? { headers: { "content-type": "application/json" }, body: JSON.stringify(body) }
+        : {}),
+    });
   } catch {
     // best-effort — the next state push will reflect reality either way
   }
@@ -102,7 +107,10 @@ export function useSimulationSocket(): UseSimResult {
 
   const start = useCallback(() => post("/api/simulation/start"), []);
   const pause = useCallback(() => post("/api/simulation/pause"), []);
-  const reset = useCallback(() => post("/api/simulation/reset"), []);
+  const reset = useCallback(
+    (scenarioKey?: string) => post("/api/simulation/reset", scenarioKey ? { scenario: scenarioKey } : undefined),
+    []
+  );
   const killTaskServer = useCallback(() => post("/api/simulation/kill-task-server"), []);
   const reviveTaskServer = useCallback(() => post("/api/simulation/revive-task-server"), []);
   const killRobot = useCallback((id: string) => post(`/api/simulation/kill-robot/${id}`), []);

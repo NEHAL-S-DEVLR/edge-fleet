@@ -14,17 +14,19 @@ const statusTone: Record<Robot["status"], "neutral" | "good" | "warn" | "bad" | 
 
 export function FleetPanel({
   robots,
+  robotLabel = "robots",
   onKill,
   onRevive,
 }: {
   robots: Robot[];
+  robotLabel?: string;
   onKill: (id: string) => void;
   onRevive: (id: string) => void;
 }) {
   return (
     <div className="flex flex-col h-full">
       <div className="px-3 py-2 border-b border-line font-mono text-[11px] uppercase tracking-wide text-[#8b8677]">
-        Fleet · {robots.filter((r) => r.alive).length}/{robots.length} online
+        Fleet · {robots.filter((r) => r.alive).length}/{robots.length} {robotLabel} online
       </div>
       <div className="flex-1 overflow-y-auto divide-y divide-line">
         {robots.map((r) => (

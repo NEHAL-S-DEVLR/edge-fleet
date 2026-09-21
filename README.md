@@ -211,9 +211,11 @@ differently on purpose:
 | FR8 — kill one robot, others don't crash | ✅ | tested — see below |
 | FR9 — on-screen counters | ✅ | `MetricsStrip`; underlying metrics now also include throughput history and open-urgent-task count (`metrics.throughput`, `metrics.currentRate`, `metrics.urgentOpen`) |
 | Must-have #7 — "kill switch" demo | ✅ | Kill Task Server button + per-robot Kill button |
-| Nice-to-have: real physical robot | ❌ not attempted | out of scope for a software-edition Round 1 |
-| Nice-to-have: packet-loss injection + graph | ❌ not built | reasonable Round 2 addition, see **Next steps** |
+| Nice-to-have: real physical robot | ❌ not attempted | out of scope for a software-edition build |
+| Nice-to-have: packet-loss injection + graph | ✅ | `--packet-loss` / `--latency-ms` / `--latency-jitter-ms` on `npm run demo:distributed` — see **Simulated network degradation** below |
 | Nice-to-have: natural-language task intake | ✅ | See **Natural-language task intake** below |
+| Dashboard: scenario picker | ✅ | Top bar dropdown, wired to the five presets in `lib/simulation/scenarios.ts` — see **Real-World Applications** |
+| Dashboard: congestion heat-map overlay | ✅ | Toggleable glow layer on `WarehouseCanvas`, sourced from `state.heat` |
 
 ## Two transports, one algorithm (FR2)
 
@@ -318,9 +320,42 @@ shutdown.
 
 `--log-file` (default `distributed-demo.log.jsonl`, repo root) writes one
 JSON line per tick — `datagramsSent`/`datagramsReceived`,
-`bidsThisTick`/`intentsThisTick`, `tasksCompleted`, `collisionsAvoided`,
-`activeRobots` — so the real UDP traffic can be verified after the fact
-without a packet sniffer.
+`bidsThisTick`/`intentsThisTick`, `datagramsDropped`/`droppedThisTick`/
+`delayedThisTick`, `tasksCompleted`, `collisionsAvoided`, `activeRobots` —
+so the real UDP traffic can be verified after the fact without a packet
+sniffer.
+
+## Simulated network degradation
+
+```
+npm run demo:distributed -- --packet-loss 0.15 --latency-ms 40 --latency-jitter-ms 60
+```
+
+The PRD nice-to-have this closes: `--packet-loss <0-1>` drops that fraction
+of datagrams outright (either direction), and `--latency-ms` /
+`--latency-jitter-ms` delay each datagram by a fixed amount plus jitter,
+before it's actually sent/processed. It's injected at the coordinator's own
+socket boundary (`DistributedCoordinator`'s `degrade()`, wrapping both
+`send()` and inbound `handleDatagram()`) rather than with OS-level
+firewall/`tc` rules, so it reproduces identically on any machine.
+
+This isn't a cosmetic counter — it degrades outcomes through the same
+mechanism a real flaky network would: each tick resets the in-flight
+bid/intent buffers right after broadcasting and only waits
+`responseWindowMs` (~150ms by default) for replies, so a datagram delayed
+past that window doesn't just arrive late, it gets silently discarded when
+the next tick's reset runs — a real bid or move intent that never counted.
+Compare a run with `--packet-loss 0.15 --latency-ms 40 --latency-jitter-ms
+60` against a plain run over the same tick count: tasks completed drops
+measurably (0 vs. 2+ in a 40-60 tick sample run during testing) because
+enough bids/intents miss their window, exactly the effect a judge asking
+"what happens on a real, imperfect network" is asking about.
+
+The console prints a live ASCII sparkline of the per-tick drop rate
+alongside the periodic summary (`ticks % 10`) — the "degradation graph" for
+a transport with no browser dashboard of its own — and every tick's
+drop/delay counts land in `--log-file` for a proper plot afterward if
+needed.
 
 ## Natural-language task intake
 
@@ -410,9 +445,9 @@ python edge_infer.py --server http://localhost:3000 --robot-id r1
 5. **Edge-AI panel** — show `edge_infer.py` running in a terminal, real
    latency numbers landing live in the dashboard.
 6. **Close** — mention the two transports already exist side by side
-   (`npm run demo:distributed` for the literal multi-process version), and
-   what's still left for Round 2: a trained detection model, packet-loss
-   injection, physical hardware.
+   (`npm run demo:distributed` for the literal multi-process version, now
+   with `--packet-loss`/`--latency-ms` degradation injection built in), and
+   what's still left: a trained detection model, physical hardware.
 
 ---
 
@@ -428,18 +463,20 @@ python edge_infer.py --server http://localhost:3000 --robot-id r1
   **Natural-language task intake** above (`lib/llm/taskParser.ts`).
 - Train/export a small quantized YOLOv8n or MobileNet-SSD ONNX model for
   `edge_infer.py --model`, replacing the classical HOG baseline.
-- Add simulated packet loss / latency injection to the real UDP transport
-  with a live degradation graph (PRD nice-to-have) — dropping/delaying
-  datagrams in `lib/transport/coordinator.ts`'s socket handler is a small
-  addition now that the transport is real, not simulated.
+- ~~Add simulated packet loss / latency injection to the real UDP transport
+  with a live degradation graph~~ — **done**, see **Simulated network
+  degradation** above (`--packet-loss`, `--latency-ms`,
+  `--latency-jitter-ms` on `npm run demo:distributed`).
 - Put the agent loop on a real Raspberry Pi or Jetson Nano chassis — one
   `agents/robotAgent.ts` process per physical unit, pointed at a
   coordinator over the LAN instead of localhost, is most of the way there
   already.
-- Wire `lib/simulation/scenarios.ts`'s presets into an actual dashboard
-  picker (currently reachable via `SCENARIO=<key> npm run dev` or
-  `POST /api/simulation/reset { "scenario": "<key>" }`, but not yet a UI
-  control) and render `state.heat` as a live warehouse-floor overlay.
+- ~~Wire `lib/simulation/scenarios.ts`'s presets into an actual dashboard
+  picker~~ — **done**: `ScenarioPicker` in the top bar (still also
+  reachable via `SCENARIO=<key> npm run dev` or `POST
+  /api/simulation/reset { "scenario": "<key>" }` for scripted demos) —
+  ~~and render `state.heat` as a live warehouse-floor overlay~~ — **done**,
+  toggleable overlay on `WarehouseCanvas` (top-right "Heat on/off" button).
 
 ---
 
@@ -457,7 +494,10 @@ reset without restarting the server), `lib/transport/` +
 multi-process UDP transport — see **Real distributed transport**),
 `lib/llm/taskParser.ts` + `app/api/tasks/natural-language/route.ts` +
 `components/dashboard/NaturalLanguageBar.tsx` (natural-language task
-intake — see **Natural-language task intake**), and this README.
+intake — see **Natural-language task intake**),
+`components/dashboard/ScenarioPicker.tsx` (the dashboard scenario picker),
+`docs/index.html` (the zero-install standalone demo — see **Zero-install
+live demo**), and this README.
 
 ## Troubleshooting
 

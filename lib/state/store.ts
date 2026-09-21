@@ -18,10 +18,11 @@ import { getScenario } from "@/lib/simulation/scenarios";
  * e.g. `SCENARIO=hospital npm run dev`; an explicit key (e.g. from a
  * reset-with-scenario API call) overrides the environment. */
 function resolveStateOptions(scenarioKey?: string): CreateStateOptions {
-  const scenario = getScenario(scenarioKey ?? process.env.SCENARIO);
+  const resolvedKey = scenarioKey ?? process.env.SCENARIO;
+  const scenario = getScenario(resolvedKey);
   if (!scenario) return {};
   const { label, robotLabel, blurb, ...options } = scenario;
-  return options;
+  return { ...options, scenarioKey: resolvedKey };
 }
 
 declare global {

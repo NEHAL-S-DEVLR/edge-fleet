@@ -12,6 +12,7 @@
 //   npm run demo:distributed
 //   npm run demo:distributed -- --robots 6 --ticks 40 --scenario hospital
 //   npm run demo:distributed -- --ticks 80 --kill-robot r3 --kill-at-tick 20 --revive-robot r3 --revive-at-tick 50
+//   npm run demo:distributed -- --ticks 120 --packet-loss 0.15 --latency-ms 40 --latency-jitter-ms 60
 import { spawn, type ChildProcess } from "node:child_process";
 import { appendFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -74,19 +75,57 @@ const reviveRobotId = arg("revive-robot");
 const reviveAtTick = arg("revive-at-tick") ? Number(arg("revive-at-tick")) : undefined;
 const killTaskServerAtTick = arg("kill-task-server-at-tick") ? Number(arg("kill-task-server-at-tick")) : undefined;
 
+// Simulated network degradation (PRD nice-to-have) — injected at the
+// coordinator's own socket boundary (lib/transport/coordinator.ts), both
+// directions, so it reproduces on any machine with no firewall/tc rules.
+// --packet-loss 0.15 drops ~15% of datagrams outright; --latency-ms 40
+// --latency-jitter-ms 60 adds 40-100ms of delay per datagram — enough,
+// against the default ~150ms responseWindowMs, to start making bids and
+// intents miss their tick's window and get silently discarded, which is
+// the real mechanism (not a cosmetic counter) by which this should show up
+// as fewer completions / more re-auctions in the metrics below.
+const packetLossRate = arg("packet-loss") ? Number(arg("packet-loss")) : 0;
+const latencyMs = arg("latency-ms") ? Number(arg("latency-ms")) : 0;
+const latencyJitterMs = arg("latency-jitter-ms") ? Number(arg("latency-jitter-ms")) : 0;
+
 writeFileSync(logFile, ""); // truncate/start fresh for this run
 
 console.log(`\n  EdgeFleet — real distributed transport demo`);
 console.log(`  Coordinator: udp://127.0.0.1:${coordinatorPort}  ·  ${robotCount} robot processes  ·  tick ${tickMs}ms`);
+if (packetLossRate > 0 || latencyMs > 0 || latencyJitterMs > 0) {
+  console.log(
+    `  Degradation: ${(packetLossRate * 100).toFixed(0)}% packet loss  ·  ${latencyMs}ms latency (+${latencyJitterMs}ms jitter)`
+  );
+}
 console.log(`  Verification log: ${logFile}\n`);
+
+// Rolling window of drop-rate-per-tick, rendered as a live ASCII sparkline
+// alongside the periodic console summary below — the "live degradation
+// graph" for a transport that has no browser dashboard of its own.
+const DROP_HISTORY_LEN = 40;
+const dropRateHistory: number[] = [];
+const SPARK_CHARS = "▁▂▃▄▅▆▇█";
+function sparkline(values: number[]): string {
+  if (values.length === 0) return "";
+  const max = Math.max(0.01, ...values);
+  return values.map((v) => SPARK_CHARS[Math.min(SPARK_CHARS.length - 1, Math.floor((v / max) * (SPARK_CHARS.length - 1)))]).join("");
+}
 
 const coordinator = new DistributedCoordinator({
   ...stateOptions,
   robotCount,
   port: coordinatorPort,
   tickMs,
+  packetLossRate,
+  latencyMs,
+  latencyJitterMs,
   onLog: (line) => console.log(`  ${line}`),
   onTick: (state, wire) => {
+    const totalThisTick = wire.bidsThisTick + wire.intentsThisTick + wire.droppedThisTick + wire.delayedThisTick;
+    const dropRateThisTick = totalThisTick > 0 ? wire.droppedThisTick / totalThisTick : 0;
+    dropRateHistory.push(dropRateThisTick);
+    if (dropRateHistory.length > DROP_HISTORY_LEN) dropRateHistory.shift();
+
     const record = {
       ts: Date.now(),
       tick: state.tick,
@@ -94,16 +133,25 @@ const coordinator = new DistributedCoordinator({
       datagramsReceived: wire.datagramsReceived,
       bidsThisTick: wire.bidsThisTick,
       intentsThisTick: wire.intentsThisTick,
+      datagramsDropped: wire.datagramsDropped,
+      droppedThisTick: wire.droppedThisTick,
+      delayedThisTick: wire.delayedThisTick,
       tasksCompleted: state.metrics.tasksCompleted,
       collisionsAvoided: state.metrics.collisionsAvoided,
       activeRobots: state.metrics.activeRobotCount,
     };
     appendFileSync(logFile, JSON.stringify(record) + "\n");
     if (state.tick % 10 === 0) {
+      const degradationSuffix =
+        packetLossRate > 0 || latencyMs > 0 || latencyJitterMs > 0
+          ? ` | dropped ${wire.datagramsDropped} total (${wire.droppedThisTick} this tick, ${wire.delayedThisTick} delayed) [${sparkline(
+              dropRateHistory
+            )}]`
+          : "";
       console.log(
         `  tick ${state.tick.toString().padStart(4)} | datagrams sent ${wire.datagramsSent} / received ${wire.datagramsReceived}` +
           ` | this tick: ${wire.bidsThisTick} bid(s), ${wire.intentsThisTick} intent(s) | completed ${state.metrics.tasksCompleted}` +
-          ` | collisions avoided ${state.metrics.collisionsAvoided}`
+          ` | collisions avoided ${state.metrics.collisionsAvoided}${degradationSuffix}`
       );
     }
     if (killRobotId && killAtTick && state.tick === killAtTick) {

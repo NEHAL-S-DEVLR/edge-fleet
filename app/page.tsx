@@ -10,6 +10,7 @@ import { TaskPanel } from "@/components/dashboard/TaskPanel";
 import { EventLog } from "@/components/dashboard/EventLog";
 import { MetricsStrip } from "@/components/dashboard/MetricsStrip";
 import { HowItWorksModal } from "@/components/dashboard/HowItWorksModal";
+import { SCENARIOS } from "@/lib/simulation/scenarios";
 
 export default function Page() {
   const sim = useSimulationSocket();
@@ -32,6 +33,7 @@ export default function Page() {
         connected={sim.connected}
         tick={state.tick}
         taskServerAlive={state.taskServerAlive}
+        scenarioKey={state.scenarioKey}
         onStart={sim.start}
         onPause={sim.pause}
         onReset={sim.reset}
@@ -45,11 +47,16 @@ export default function Page() {
 
       <div className="flex-1 grid grid-cols-[240px_1fr_320px] min-h-0">
         <div className="border-r border-line min-h-0">
-          <FleetPanel robots={state.robots} onKill={sim.killRobot} onRevive={sim.reviveRobot} />
+          <FleetPanel
+            robots={state.robots}
+            robotLabel={state.scenarioKey ? SCENARIOS[state.scenarioKey]?.robotLabel : undefined}
+            onKill={sim.killRobot}
+            onRevive={sim.reviveRobot}
+          />
         </div>
 
         <div className="min-h-0">
-          <WarehouseCanvas warehouse={state.warehouse} robots={state.robots} tasks={state.tasks} />
+          <WarehouseCanvas warehouse={state.warehouse} robots={state.robots} tasks={state.tasks} heat={state.heat} />
         </div>
 
         <div className="border-l border-line min-h-0 grid grid-rows-2">
