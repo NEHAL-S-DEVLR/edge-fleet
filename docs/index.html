@@ -1,0 +1,1338 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>EdgeFleet Live Simulation</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --paper: #f3f1ea;
+    --surface: #ffffff;
+    --surface-2: #e9e5da;
+    --ink: #1d2023;
+    --ink-soft: #4a5254;
+    --text: var(--ink);
+    --text-muted: #5b6668;
+    --border: rgba(29, 32, 35, 0.14);
+    --border-strong: rgba(29, 32, 35, 0.24);
+    --teal: #0f6e73;
+    --teal-soft: #e1eeed;
+    --teal-strong: #0a4e52;
+    --orange: #c8480f;
+    --orange-soft: #fbe6da;
+    --amber: #a9760f;
+    --amber-soft: #f5e9d2;
+    --shadow: 0 1px 2px rgba(29, 32, 35, 0.06), 0 10px 28px -16px rgba(29, 32, 35, 0.28);
+    --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+    --font-body: "Inter", system-ui, -apple-system, sans-serif;
+    --font-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+    --tick-ms: 380ms;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #15181a;
+      --surface: #1d2124;
+      --surface-2: #262b2e;
+      --ink: #ece9e2;
+      --text-muted: #9aa3a5;
+      --border: rgba(236, 233, 226, 0.14);
+      --border-strong: rgba(236, 233, 226, 0.26);
+      --teal: #4fc7c2;
+      --teal-soft: rgba(79, 199, 194, 0.14);
+      --teal-strong: #8ee0da;
+      --orange: #ff8a52;
+      --orange-soft: rgba(255, 138, 82, 0.16);
+      --amber: #e4b04e;
+      --amber-soft: rgba(228, 176, 78, 0.16);
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 14px 32px -18px rgba(0, 0, 0, 0.6);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #15181a;
+    --surface: #1d2124;
+    --surface-2: #262b2e;
+    --ink: #ece9e2;
+    --text-muted: #9aa3a5;
+    --border: rgba(236, 233, 226, 0.14);
+    --border-strong: rgba(236, 233, 226, 0.26);
+    --teal: #4fc7c2;
+    --teal-soft: rgba(79, 199, 194, 0.14);
+    --teal-strong: #8ee0da;
+    --orange: #ff8a52;
+    --orange-soft: rgba(255, 138, 82, 0.16);
+    --amber: #e4b04e;
+    --amber-soft: rgba(228, 176, 78, 0.16);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 14px 32px -18px rgba(0, 0, 0, 0.6);
+  }
+
+  * { box-sizing: border-box; }
+  body { background: var(--paper); color: var(--text); }
+  .app {
+    font-family: var(--font-body);
+    color: var(--text);
+    background: var(--paper);
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 18px 18px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  h1, h2, h3 { font-family: var(--font-display); font-weight: 600; margin: 0; text-wrap: balance; }
+  .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+  /* ---- top bar ---- */
+  .top-bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px 18px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 16px;
+    box-shadow: var(--shadow);
+  }
+  .brand { display: flex; align-items: baseline; gap: 10px; margin-right: auto; }
+  .brand h1 { font-size: 1.55rem; letter-spacing: 0.01em; }
+  .brand .tag { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+  .tick-readout { font-size: 0.85rem; color: var(--text-muted); display: flex; align-items: center; gap: 8px; }
+  .tick-readout strong { font-family: var(--font-mono); font-size: 1rem; color: var(--text); }
+  .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+  button, select {
+    font-family: var(--font-body);
+    font-size: 0.84rem;
+    font-weight: 600;
+    border-radius: 7px;
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text);
+    padding: 7px 13px;
+    cursor: pointer;
+    transition: background 120ms ease, border-color 120ms ease, transform 80ms ease;
+  }
+  button:hover, select:hover { border-color: var(--teal); }
+  button:active { transform: translateY(1px); }
+  button:focus-visible, select:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+  button.primary { background: var(--teal); border-color: var(--teal); color: #fff; }
+  button.primary:hover { background: var(--teal-strong); border-color: var(--teal-strong); }
+  button.danger { border-color: var(--orange); color: var(--orange); }
+  button.danger:hover { background: var(--orange-soft); }
+  button.on { background: var(--teal-soft); border-color: var(--teal); color: var(--teal-strong); }
+  button.ghost { border-color: transparent; background: transparent; color: var(--text-muted); }
+  button.ghost:hover { background: var(--surface-2); color: var(--text); }
+  .speed-group { display: flex; border: 1px solid var(--border-strong); border-radius: 7px; overflow: hidden; }
+  .speed-group button { border: none; border-radius: 0; padding: 7px 11px; }
+  .speed-group button + button { border-left: 1px solid var(--border-strong); }
+  .speed-group button.on { background: var(--teal); color: #fff; }
+
+  /* ---- scenario bar ---- */
+  .scenario-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 16px;
+    box-shadow: var(--shadow);
+  }
+  .scenario-bar .field-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); font-weight: 700; flex: none; }
+  #scenario-select { min-width: 190px; flex: none; }
+  #scenario-blurb { flex: 1; min-width: 240px; font-size: 0.8rem; line-height: 1.45; color: var(--ink-soft); }
+  #scenario-blurb strong { color: var(--text); }
+
+  /* ---- info / how it works ---- */
+  details.info {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 16px;
+  }
+  details.info summary {
+    cursor: pointer;
+    font-family: var(--font-display);
+    font-size: 1rem;
+    font-weight: 600;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  details.info summary::-webkit-details-marker { display: none; }
+  details.info summary::before { content: "▸"; color: var(--teal); font-size: 0.8rem; transition: transform 120ms ease; }
+  details.info[open] summary::before { transform: rotate(90deg); }
+  .info-body {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px 22px;
+    padding-top: 10px;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: var(--ink-soft);
+  }
+  .info-body h4 { font-family: var(--font-body); font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); margin-bottom: 6px; }
+  .info-body ul { margin: 0; padding-left: 1.1em; }
+  .info-body li { margin-bottom: 4px; }
+  .info-body li::marker { color: var(--teal); }
+  .info-body p { margin: 0 0 6px; }
+
+  /* ---- main grid ---- */
+  .grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.55fr) minmax(280px, 1fr);
+    gap: 14px;
+    align-items: start;
+  }
+  @media (max-width: 860px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .panel-head h2 { font-size: 1.02rem; }
+  .panel-head .count { font-family: var(--font-mono); font-size: 0.76rem; color: var(--text-muted); }
+  .panel-body { padding: 12px 14px; overflow: auto; }
+
+  /* ---- canvas (isometric 3D floor) ---- */
+  .canvas-wrap { overflow-x: auto; background: radial-gradient(120% 100% at 50% 0%, var(--surface) 0%, var(--paper) 100%); border-radius: 8px; }
+  #warehouse-svg { display: block; width: 100%; height: auto; }
+  .rack-top { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 0.8; }
+  .rack-side-r { stroke: var(--border-strong); stroke-width: 0.6; }
+  .rack-side-l { stroke: var(--border-strong); stroke-width: 0.6; }
+  .rack-group { transition: filter 160ms ease; }
+  .floor-tile { fill: var(--paper); stroke: var(--border); stroke-width: 0.5; opacity: 0.55; }
+  .lane { stroke: var(--surface-2); stroke-width: 10; stroke-linecap: round; fill: none; }
+  .lane-mark { stroke: var(--teal); stroke-width: 1.3; stroke-dasharray: 1 7; stroke-linecap: round; fill: none; opacity: 0.55; animation: lane-flow 1.1s linear infinite; }
+  @keyframes lane-flow { to { stroke-dashoffset: -16; } }
+  .node-aisle { fill: var(--border-strong); }
+  .node-shadow { fill: rgba(0,0,0,0.16); }
+  .node-chokepoint circle.mark { fill: var(--surface); stroke: var(--teal); stroke-width: 1.8; }
+  .node-chokepoint { animation: pedestal-pulse 2.6s ease-in-out infinite; transform-origin: center; }
+  .node-dock rect { fill: var(--orange-soft); stroke: var(--orange); stroke-width: 1.3; }
+  .node-dock text, .node-charge text { font-family: var(--font-mono); font-size: 6.6px; fill: var(--text-muted); letter-spacing: 0.03em; }
+  .node-charge circle.mark { fill: var(--amber-soft); stroke: var(--amber); stroke-width: 1.3; }
+  .node-charge path { stroke: var(--amber); stroke-width: 1.3; fill: none; stroke-linejoin: round; stroke-linecap: round; }
+  .node-charge { animation: pedestal-pulse 1.8s ease-in-out infinite; transform-origin: center; }
+  @keyframes pedestal-pulse { 0%, 100% { opacity: 0.85; } 50% { opacity: 1; } }
+  .heat-cell { pointer-events: none; animation: heat-throb 1.6s ease-in-out infinite; transform-origin: center; }
+  @keyframes heat-throb { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+
+  .task-marker-pickup { fill: var(--surface); stroke-width: 1.5; }
+  .task-marker-pickup.urgent { fill: var(--orange); animation: pulse-urgent 0.9s ease-in-out infinite, bob-float 1.4s ease-in-out infinite; }
+  .task-marker-dropoff { fill: none; stroke-width: 1.5; }
+  .task-marker-group { animation: bob-float 2.1s ease-in-out infinite; transform-origin: center; }
+  .task-shadow { fill: rgba(0,0,0,0.14); }
+  .task-link { stroke-width: 1.3; stroke-dasharray: 2 4; opacity: 0.5; fill: none; animation: lane-flow 0.7s linear infinite; }
+  @keyframes pulse-urgent { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+  @keyframes bob-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2.2px); } }
+
+  .robot { transition: transform var(--tick-ms) linear; }
+  .robot .robot-shadow { fill: rgba(0,0,0,0.22); transition: rx var(--tick-ms) ease, opacity var(--tick-ms) ease; }
+  .robot .robot-lift { transform-origin: center; }
+  .robot.idle .robot-lift { animation: breathe 2.4s ease-in-out infinite; }
+  .robot.moving .robot-lift { animation: bob-run 0.5s ease-in-out infinite; }
+  .robot.charging .robot-lift { animation: breathe 1.1s ease-in-out infinite; }
+  @keyframes breathe { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-1.1px) scale(1.03); } }
+  @keyframes bob-run { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2.6px); } }
+  .robot circle.body { stroke: var(--surface); stroke-width: 2.2; }
+  .robot circle.ring { fill: none; stroke-width: 1.8; }
+  .robot text.label { font-family: var(--font-mono); font-size: 7.4px; font-weight: 600; fill: #fff; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+  .robot.moving circle.ring { stroke: var(--teal); animation: pulse-ring 1.1s ease-in-out infinite; }
+  .robot.idle circle.ring { stroke: var(--border-strong); }
+  .robot.charging circle.ring { stroke: var(--amber); stroke-dasharray: 3 3; animation: spin 2.4s linear infinite; transform-origin: center; }
+  .robot.dead circle.body { opacity: 0.28; }
+  .robot.dead circle.ring { display: none; }
+  .robot.dead .robot-lift { animation: none; }
+  .robot .dead-mark { display: none; stroke: var(--orange); stroke-width: 2; stroke-linecap: round; }
+  .robot.dead .dead-mark { display: block; }
+  @keyframes pulse-ring { 0%, 100% { opacity: 0.55; r: 11.5; } 50% { opacity: 1; r: 13.2; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) {
+    .robot { transition: none; }
+    .robot.moving circle.ring, .robot.charging circle.ring, .task-marker-pickup.urgent,
+    .robot-lift, .lane-mark, .task-link, .node-chokepoint, .node-charge, .heat-cell, .task-marker-group { animation: none; }
+  }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 10px 16px; padding: 9px 14px; border-top: 1px solid var(--border); font-size: 0.72rem; color: var(--text-muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .legend i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; }
+
+  /* ---- fleet list ---- */
+  .robot-row { display: flex; align-items: center; gap: 7px; padding: 4.5px 0; border-bottom: 1px solid var(--border); font-size: 0.76rem; }
+  .robot-row:last-child { border-bottom: none; }
+  .robot-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 1.5px rgba(0,0,0,0.15); }
+  .robot-name { font-family: var(--font-mono); font-weight: 600; width: 26px; flex: none; }
+  .robot-node { font-family: var(--font-mono); font-size: 0.68rem; color: var(--text-muted); width: 38px; flex: none; }
+  .battery-track { width: 34px; flex: none; height: 5px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+  .battery-fill { height: 100%; border-radius: 3px; }
+  .battery-pct { font-family: var(--font-mono); font-size: 0.68rem; color: var(--text-muted); width: 26px; flex: none; text-align: right; }
+  .pill { font-size: 0.64rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; padding: 2px 6px; border-radius: 20px; white-space: nowrap; flex: none; }
+  .pill-idle { background: var(--surface-2); color: var(--text-muted); }
+  .pill-moving { background: var(--teal-soft); color: var(--teal-strong); }
+  .pill-charging { background: var(--amber-soft); color: var(--amber); }
+  .pill-dead { background: var(--orange-soft); color: var(--orange); }
+  .pill-announced { background: var(--surface-2); color: var(--text-muted); }
+  .pill-pickup { background: var(--teal-soft); color: var(--teal-strong); }
+  .pill-dropoff { background: var(--amber-soft); color: var(--amber); }
+  .pill-urgent { background: var(--orange-soft); color: var(--orange); }
+  .row-btn { font-size: 0.66rem; padding: 4px 7px; flex: none; }
+
+  /* ---- tasks ---- */
+  .task-row { padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 0.78rem; }
+  .task-row:last-child { border-bottom: none; }
+  .task-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 2px; }
+  .task-top .badges { display: flex; gap: 4px; }
+  .task-id { font-family: var(--font-mono); font-weight: 600; }
+  .task-route { font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-muted); display: flex; justify-content: space-between; }
+
+  /* ---- log ---- */
+  .log-panel .panel-body { max-height: 280px; }
+  .log-line { font-family: var(--font-mono); font-size: 0.72rem; line-height: 1.55; padding: 2px 0; border-bottom: 1px dotted var(--border); display: flex; gap: 7px; }
+  .log-line:last-child { border-bottom: none; }
+  .log-tick { color: var(--text-muted); flex: none; width: 34px; text-align: right; }
+  .log-text { color: var(--ink-soft); }
+  .log-line.t-bid .log-text { color: var(--text-muted); }
+  .log-line.t-task-announced .log-text, .log-line.t-task-assigned .log-text, .log-line.t-task-picked .log-text { color: var(--teal-strong); }
+  .log-line.t-task-completed .log-text { color: var(--teal-strong); font-weight: 600; }
+  .log-line.t-yield .log-text, .log-line.t-collision-avoided .log-text { color: var(--amber); }
+  .log-line.t-robot-killed .log-text, .log-line.t-task-server-killed .log-text, .log-line.t-task-orphaned .log-text { color: var(--orange); font-weight: 600; }
+  .log-line.t-robot-revived .log-text, .log-line.t-task-server-revived .log-text { color: var(--teal-strong); font-weight: 600; }
+
+  /* ---- metrics strip ---- */
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(126px, 1fr));
+    gap: 10px;
+  }
+  .metric-tile {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 11px 14px;
+    box-shadow: var(--shadow);
+  }
+  .metric-tile.wide { grid-column: span 2; min-width: 220px; }
+  .metric-tile .label { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 4px; }
+  .metric-tile .value { font-family: var(--font-mono); font-size: 1.42rem; font-weight: 600; color: var(--text); }
+  .metric-tile .value.warn { color: var(--orange); }
+  .metric-tile .value.good { color: var(--teal); }
+  .spark-wrap { display: flex; align-items: flex-end; gap: 10px; }
+  .spark-value { font-family: var(--font-mono); font-weight: 600; font-size: 1.3rem; flex: none; }
+  .spark-svg { flex: 1; height: 34px; display: block; min-width: 90px; }
+
+  .empty-note { color: var(--text-muted); font-size: 0.78rem; padding: 4px 0; }
+</style>
+
+<div class="app" id="app">
+  <div class="top-bar">
+    <div class="brand">
+      <h1>EdgeFleet</h1>
+      <span class="tag">Live coordination simulation</span>
+    </div>
+    <div class="tick-readout">Tick <strong class="mono" id="tick-value">0</strong></div>
+    <div class="controls">
+      <button class="primary" id="btn-start">Pause</button>
+      <button id="btn-reset">Reset</button>
+      <button id="btn-add-task">Add task</button>
+      <button class="danger" id="btn-kill-server">Kill task server</button>
+      <div class="speed-group" role="group" aria-label="Simulation speed">
+        <button data-speed="700" id="speed-1x">1×</button>
+        <button data-speed="380" class="on" id="speed-2x">2×</button>
+        <button data-speed="160" id="speed-4x">4×</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="scenario-bar">
+    <span class="field-label">Deployment</span>
+    <select id="scenario-select" aria-label="Real-world deployment scenario">
+      <option value="fulfillment">E-commerce fulfillment</option>
+      <option value="hospital">Hospital logistics</option>
+      <option value="port">Port / container yard</option>
+      <option value="manufacturing">Manufacturing line</option>
+      <option value="disaster">Disaster response</option>
+    </select>
+    <span id="scenario-blurb"></span>
+  </div>
+
+  <details class="info">
+    <summary>How this simulation actually coordinates itself</summary>
+    <div class="info-body">
+      <div>
+        <h4>What's really running</h4>
+        <ul>
+          <li>Same algorithm as the full prototype, ported to JS — not a simplified stand-in.</li>
+          <li>Idle robots bid on each open task (distance + battery penalty); lowest bid wins — no dispatcher decides.</li>
+          <li>Every tick, each robot only publishes its own intended next cell; conflicts resolve by "longest wait wins."</li>
+          <li><strong>Urgent tasks</strong> (a STAT order, a stalled cell) get first pick of the idle fleet each tick — the auction rule doesn't change, just whose turn it is to draw bidders.</li>
+        </ul>
+      </div>
+      <div>
+        <h4>Watch for this</h4>
+        <ul>
+          <li>Two robots meeting at a teal-ringed chokepoint node — one yields, resolved without a referee.</li>
+          <li>An idle robot parked on a busy cell steps aside after 3 ticks (the courtesy-yield fix — this was a real livelock we hit in testing).</li>
+          <li>An orange glow pooling around a node is the <strong>congestion heatmap</strong> — nodes where robots keep getting stuck, decaying back down once traffic clears.</li>
+          <li><strong>Kill task server</strong>: no new work is announced, but open tasks still get finished. Kill a moving robot: its task is re-announced and won by someone else within a tick.</li>
+        </ul>
+      </div>
+      <div>
+        <h4>Honest simplification</h4>
+        <ul>
+          <li>All robots run in one browser tab here, same as the one-process build. The message-bus discipline (no robot reads another's state directly) is real; literal separate sockets is a one-file swap in the full prototype, not shown in this artifact.</li>
+        </ul>
+      </div>
+    </div>
+  </details>
+
+  <details class="info">
+    <summary>Where this deploys in the real world</summary>
+    <div class="info-body">
+      <div>
+        <h4>E-commerce fulfillment</h4>
+        <ul>
+          <li>Amazon/Ocado-style centers: totes shuttle pick face → pack station continuously.</li>
+          <li>A wide, evenly-loaded fleet (this scenario runs 14 AMRs) is what keeps pack queues short at peak.</li>
+        </ul>
+      </div>
+      <div>
+        <h4>Hospital logistics</h4>
+        <ul>
+          <li>TUG-style robots already ferry meds, linens and lab samples between wards at hospitals like UCSF.</li>
+          <li>A STAT order needs to cut the queue safely — this scenario runs urgency at 40% of tasks.</li>
+        </ul>
+      </div>
+      <div>
+        <h4>Ports &amp; container yards</h4>
+        <ul>
+          <li>Rotterdam and Qingdao run AGV fleets moving containers between stacks and quay cranes 24/7.</li>
+          <li>Zero tolerance for one dispatcher going down — exactly the kill-switch demo above.</li>
+        </ul>
+      </div>
+      <div>
+        <h4>Manufacturing lines</h4>
+        <ul>
+          <li>Just-in-time assembly (automotive, electronics) feeds kitted parts to cells on demand.</li>
+          <li>A fleet reroutes itself around a jam instead of a fixed conveyor stalling the whole line.</li>
+        </ul>
+      </div>
+      <div>
+        <h4>Disaster response</h4>
+        <ul>
+          <li>No reliable central network in a disaster zone — peer-to-peer coordination isn't optional.</li>
+          <li>Most tasks are urgent by definition; this scenario sets urgency to 55%.</li>
+        </ul>
+      </div>
+      <div>
+        <h4>Also applicable</h4>
+        <ul>
+          <li><strong>Agriculture</strong> — fleets of harvesting/spraying robots coordinating field zones without cell coverage.</li>
+          <li><strong>Mining</strong> — underground haul trucks and loaders, same collision-avoidance rule, no radio line-of-sight to a control room.</li>
+        </ul>
+      </div>
+    </div>
+  </details>
+
+  <div class="grid">
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Warehouse floor</h2>
+        <span class="count mono" id="floor-count">15 × 10 grid · 14 AMRs</span>
+      </div>
+      <div class="panel-body canvas-wrap">
+        <svg id="warehouse-svg" viewBox="0 0 728 498" xmlns="http://www.w3.org/2000/svg">
+          <g id="layer-racks"></g>
+          <g id="layer-lanes"></g>
+          <g id="layer-heat"></g>
+          <g id="layer-nodes"></g>
+          <g id="layer-tasks"></g>
+          <g id="layer-robots"></g>
+        </svg>
+      </div>
+      <div class="legend">
+        <span><i style="background:var(--border-strong)"></i>aisle node</span>
+        <span><i style="background:var(--surface);box-shadow:0 0 0 2px var(--teal) inset"></i>chokepoint</span>
+        <span><i style="background:var(--orange-soft);box-shadow:0 0 0 2px var(--orange) inset;border-radius:3px"></i>dock</span>
+        <span><i style="background:var(--amber-soft);box-shadow:0 0 0 2px var(--amber) inset"></i>charge point</span>
+        <span><i style="background:var(--surface-2)"></i>shelving rack</span>
+        <span><i style="background:var(--orange);opacity:0.45"></i>congestion heat</span>
+        <span><i style="background:var(--orange);border-radius:2px"></i>urgent task</span>
+      </div>
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:14px;">
+      <div class="panel">
+        <div class="panel-head">
+          <h2 id="fleet-label">Fleet</h2>
+          <span class="count mono" id="fleet-count">14/14 active</span>
+        </div>
+        <div class="panel-body" id="fleet-list" style="max-height:400px;"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Task queue</h2>
+          <span class="count mono" id="task-count">0 open</span>
+        </div>
+        <div class="panel-body" id="task-list" style="max-height:220px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel log-panel">
+    <div class="panel-head">
+      <h2>Message log</h2>
+      <span class="count mono">bids · assignments · yields · faults</span>
+    </div>
+    <div class="panel-body" id="log-list"></div>
+  </div>
+
+  <div class="metrics" id="metrics"></div>
+</div>
+
+<script>
+// ===== Ported simulation engine (identical logic to lib/simulation/*.ts) =====
+(function (root, factory) {
+  if (typeof module === "object" && module.exports) { module.exports = factory(); }
+  else { root.Sim = factory(); }
+})(typeof self !== "undefined" ? self : this, function () {
+  "use strict";
+
+  var COLS = 15, ROWS = 10;
+
+  function crossAisleRows(rows) {
+    var set = {};
+    for (var y = 0; y < rows; y++) { if (y % 3 === 0 || y === rows - 1) set[y] = true; }
+    return set;
+  }
+
+  function buildWarehouse(cols, rows) {
+    cols = cols || COLS; rows = rows || ROWS;
+    var crossRows = crossAisleRows(rows);
+    function nodeExists(x, y) {
+      if (x < 0 || x >= cols || y < 0 || y >= rows) return false;
+      if (crossRows[y]) return true;
+      return x % 2 === 0;
+    }
+    function edgeStationKind(x, y) {
+      if (y !== 0 && y !== rows - 1) return null;
+      if (x % 2 !== 0) return null;
+      var idx = x / 2;
+      if (idx % 4 === 0) return "charge";
+      if (idx % 4 === 2) return "dock";
+      return null;
+    }
+    var nodes = [], idOf = {}, id = 0;
+    for (var y = 0; y < rows; y++) {
+      for (var x = 0; x < cols; x++) {
+        if (!nodeExists(x, y)) continue;
+        var isIntersection = crossRows[y] && x % 2 === 0;
+        var kind = "aisle";
+        if (isIntersection) kind = "chokepoint";
+        var station = edgeStationKind(x, y);
+        if (station) kind = station;
+        nodes.push({ id: id, x: x, y: y, kind: kind });
+        idOf[x + "," + y] = id;
+        id++;
+      }
+    }
+    var edges = [], adjacency = {};
+    nodes.forEach(function (n) { adjacency[n.id] = []; });
+    function tryLink(x1, y1, x2, y2) {
+      var a = idOf[x1 + "," + y1], b = idOf[x2 + "," + y2];
+      if (a === undefined || b === undefined) return;
+      edges.push({ from: a, to: b });
+      adjacency[a].push(b); adjacency[b].push(a);
+    }
+    nodes.forEach(function (n) { tryLink(n.x, n.y, n.x + 1, n.y); tryLink(n.x, n.y, n.x, n.y + 1); });
+    return { cols: cols, rows: rows, nodes: nodes, edges: edges, adjacency: adjacency };
+  }
+
+  function heuristic(w, a, b) { var na = w.nodes[a], nb = w.nodes[b]; return Math.abs(na.x - nb.x) + Math.abs(na.y - nb.y); }
+  function findPath(w, start, goal) {
+    if (start === goal) return [start];
+    var open = {}; open[start] = true;
+    var cameFrom = {}, gScore = {}; gScore[start] = 0;
+    var fScore = {}; fScore[start] = heuristic(w, start, goal);
+    while (Object.keys(open).length > 0) {
+      var current = null, bestF = Infinity;
+      for (var idStr in open) {
+        var idNum = +idStr;
+        var f = fScore[idNum] === undefined ? Infinity : fScore[idNum];
+        if (f < bestF) { bestF = f; current = idNum; }
+      }
+      if (current === null) break;
+      if (current === goal) {
+        var path = [current];
+        while (cameFrom[current] !== undefined) { current = cameFrom[current]; path.unshift(current); }
+        return path;
+      }
+      delete open[current];
+      var neighbors = w.adjacency[current] || [];
+      for (var i = 0; i < neighbors.length; i++) {
+        var n = neighbors[i];
+        var tentativeG = (gScore[current] === undefined ? Infinity : gScore[current]) + 1;
+        if (tentativeG < (gScore[n] === undefined ? Infinity : gScore[n])) {
+          cameFrom[n] = current; gScore[n] = tentativeG; fScore[n] = tentativeG + heuristic(w, n, goal); open[n] = true;
+        }
+      }
+    }
+    return [];
+  }
+  function pathLength(w, start, goal) { var p = findPath(w, start, goal); return p.length === 0 ? Infinity : p.length - 1; }
+
+  var ROBOT_COLORS = [
+    "#ff8248", "#3fbdb7", "#d9a53c", "#5aab6b",
+    "#8a7cff", "#e0584f", "#4fa3ff", "#c86bd6",
+    "#c98a2c", "#3f9e6d", "#e0648f", "#5c8fe0",
+    "#b0a13f", "#e08a3f", "#4fb0a5", "#9a6bd6"
+  ];
+  var ROBOT_NAMES = [
+    "AMR-01", "AMR-02", "AMR-03", "AMR-04", "AMR-05", "AMR-06", "AMR-07", "AMR-08",
+    "AMR-09", "AMR-10", "AMR-11", "AMR-12", "AMR-13", "AMR-14", "AMR-15", "AMR-16"
+  ];
+  var MAX_ROBOTS = ROBOT_NAMES.length;
+
+  function pickStartNodes(w, count) {
+    var candidates = w.nodes.filter(function (n) { return n.kind === "chokepoint" || n.kind === "dock" || n.kind === "charge"; });
+    var chosen = []; var step = Math.max(1, Math.floor(candidates.length / count));
+    for (var i = 0; i < count && i * step < candidates.length; i++) chosen.push(candidates[i * step].id);
+    while (chosen.length < count) chosen.push(candidates[chosen.length % candidates.length].id);
+    return chosen;
+  }
+
+  function createInitialState(options) {
+    var opts = options || {};
+    var warehouse = buildWarehouse(opts.cols, opts.rows);
+    var robotCount = Math.max(1, Math.min(MAX_ROBOTS, opts.robotCount !== undefined ? opts.robotCount : 8));
+    var starts = pickStartNodes(warehouse, robotCount);
+    var robots = starts.map(function (node, i) {
+      return { id: "r" + (i + 1), name: ROBOT_NAMES[i], color: ROBOT_COLORS[i % ROBOT_COLORS.length], node: node, path: [], status: "idle", battery: 85 + Math.round(Math.random() * 15), taskId: null, alive: true, waitTicks: 0 };
+    });
+    return {
+      tick: 0, running: false, taskServerAlive: true, warehouse: warehouse, robots: robots, tasks: [], messages: [],
+      metrics: { tick: 0, collisionsAvoided: 0, tasksCompleted: 0, tasksInProgress: 0, activeRobotCount: robotCount, totalRobotCount: robotCount, throughput: [], currentRate: 0, urgentOpen: 0 },
+      nextTaskAt: 3, _taskCounter: 0, _msgId: 0,
+      urgencyRatio: opts.urgencyRatio !== undefined ? opts.urgencyRatio : 0.18,
+      taskMinGap: opts.taskMinGap !== undefined ? opts.taskMinGap : MIN_GAP,
+      taskMaxGap: opts.taskMaxGap !== undefined ? opts.taskMaxGap : MAX_GAP,
+      maxOpenTasks: opts.maxOpenTasks !== undefined ? opts.maxOpenTasks : MAX_OPEN,
+      heat: {},
+      throughput: [],
+      _bucketSize: 20, _bucketTicks: 0, _bucketCompleted: 0, _justCompleted: 0
+    };
+  }
+
+  function logMessage(state, type, from, text, payload) {
+    var entry = { id: state._msgId++, tick: state.tick, type: type, from: from, text: text, payload: payload };
+    state.messages.push(entry);
+    if (state.messages.length > 120) state.messages.splice(0, state.messages.length - 120);
+    return entry;
+  }
+  function randomWalkableNode(state) { var nodes = state.warehouse.nodes; return nodes[Math.floor(Math.random() * nodes.length)].id; }
+  function createTask(state, pickup, dropoff, urgent) {
+    var p = pickup !== undefined && pickup !== null ? pickup : randomWalkableNode(state);
+    var d = dropoff !== undefined && dropoff !== null ? dropoff : randomWalkableNode(state);
+    var guard = 0;
+    while (d === p && guard < 10) { d = randomWalkableNode(state); guard++; }
+    state._taskCounter += 1;
+    var isUrgent = urgent !== undefined ? !!urgent : Math.random() < (state.urgencyRatio || 0);
+    var task = { id: "t" + state._taskCounter, pickup: p, dropoff: d, status: "announced", assignedTo: null, urgent: isUrgent, createdTick: state.tick, assignedTick: null, completedTick: null, bids: [] };
+    state.tasks.push(task);
+    logMessage(state, "task-announced", "task-server", (isUrgent ? "⚠ URGENT — " : "") + "Task " + task.id + " announced: pickup @" + p + " → dropoff @" + d, { taskId: task.id, urgent: isUrgent });
+    return task;
+  }
+  var MIN_GAP = 14, MAX_GAP = 30, MAX_OPEN = 6;
+  function maybeAnnounceTask(state) {
+    if (!state.taskServerAlive) return;
+    if (state.tick < state.nextTaskAt) return;
+    var maxOpen = state.maxOpenTasks !== undefined ? state.maxOpenTasks : MAX_OPEN;
+    var minGap = state.taskMinGap !== undefined ? state.taskMinGap : MIN_GAP;
+    var maxGap = state.taskMaxGap !== undefined ? state.taskMaxGap : MAX_GAP;
+    var openTasks = state.tasks.filter(function (t) { return t.status === "announced" || t.status === "en_route_pickup" || t.status === "en_route_dropoff"; }).length;
+    if (openTasks < maxOpen) createTask(state);
+    state.nextTaskAt = state.tick + minGap + Math.floor(Math.random() * Math.max(1, maxGap - minGap));
+  }
+  function computeBidCost(state, robot, task) {
+    var dist = pathLength(state.warehouse, robot.node, task.pickup);
+    if (!isFinite(dist)) return Infinity;
+    return dist + (100 - robot.battery) * 0.15;
+  }
+  function planPathTo(state, robot, dest) { var full = findPath(state.warehouse, robot.node, dest); robot.path = full.slice(1); }
+
+  function runAuctions(state) {
+    var openTasks = state.tasks.filter(function (t) { return t.status === "announced"; });
+    if (openTasks.length === 0) return;
+    openTasks.sort(function (a, b) {
+      if (!!a.urgent !== !!b.urgent) return a.urgent ? -1 : 1;
+      return a.createdTick - b.createdTick;
+    });
+    var idleRobots = state.robots.filter(function (r) { return r.alive && r.status === "idle"; });
+    openTasks.forEach(function (task) {
+      idleRobots.forEach(function (robot) {
+        var cost = computeBidCost(state, robot, task);
+        if (!isFinite(cost)) return;
+        task.bids.push({ robotId: robot.id, cost: cost });
+        logMessage(state, "bid", robot.id, robot.name + " bids " + cost.toFixed(1) + " for " + task.id, { taskId: task.id, cost: cost });
+      });
+      if (task.bids.length === 0) return;
+      var winner = task.bids[0];
+      task.bids.forEach(function (b) { if (b.cost < winner.cost || (b.cost === winner.cost && b.robotId < winner.robotId)) winner = b; });
+      var robot = state.robots.filter(function (r) { return r.id === winner.robotId; })[0];
+      if (!robot || robot.status !== "idle") return;
+      task.status = "en_route_pickup"; task.assignedTo = robot.id; task.assignedTick = state.tick;
+      robot.status = "moving"; robot.taskId = task.id;
+      planPathTo(state, robot, task.pickup);
+      logMessage(state, "task-assigned", robot.id, robot.name + " wins " + task.id + " (bid " + winner.cost.toFixed(1) + ")", { taskId: task.id, robotId: robot.id });
+    });
+  }
+
+  function checkArrivals(state) {
+    state.robots.forEach(function (robot) {
+      if (!robot.alive || robot.status !== "moving" || robot.path.length !== 0) return;
+      var task = state.tasks.filter(function (t) { return t.id === robot.taskId; })[0];
+      if (!task) { robot.status = "idle"; robot.taskId = null; return; }
+      if (task.status === "en_route_pickup" && robot.node === task.pickup) {
+        task.status = "en_route_dropoff"; planPathTo(state, robot, task.dropoff);
+        logMessage(state, "task-picked", robot.id, robot.name + " picked up " + task.id + ", heading to dropoff", { taskId: task.id });
+      } else if (task.status === "en_route_dropoff" && robot.node === task.dropoff) {
+        task.status = "completed"; task.completedTick = state.tick; robot.status = "idle"; robot.taskId = null;
+        state._justCompleted = (state._justCompleted || 0) + 1;
+        logMessage(state, "task-completed", robot.id, robot.name + " completed " + task.id, { taskId: task.id });
+      }
+    });
+  }
+
+  function handleBatteryAndCharging(state) {
+    var chargeNodes = state.warehouse.nodes.filter(function (n) { return n.kind === "charge"; });
+    state.robots.forEach(function (robot) {
+      if (!robot.alive) return;
+      if (robot.status === "idle" && robot.battery < 20 && chargeNodes.length > 0) {
+        var nearest = chargeNodes[0]; var best = pathLength(state.warehouse, robot.node, nearest.id);
+        chargeNodes.forEach(function (n) { var d = pathLength(state.warehouse, robot.node, n.id); if (d < best) { best = d; nearest = n; } });
+        planPathTo(state, robot, nearest.id); robot.status = "charging";
+      } else if (robot.status === "charging" && robot.path.length === 0) {
+        robot.battery = Math.min(100, robot.battery + 3);
+        if (robot.battery >= 95) robot.status = "idle";
+      }
+    });
+  }
+
+  function publishIntent(robot) {
+    if (!robot.alive) return null;
+    if ((robot.status !== "moving" && robot.status !== "charging") || robot.path.length === 0) return null;
+    return { robotId: robot.id, fromNode: robot.node, toNode: robot.path[0] };
+  }
+  function applyMove(robot) { if (robot.path.length === 0) return; robot.node = robot.path.shift(); robot.battery = Math.max(0, robot.battery - 0.4); robot.waitTicks = 0; }
+
+  function bumpHeat(state, nodeId, amount) { state.heat[nodeId] = (state.heat[nodeId] || 0) + amount; }
+  function decayHeat(state) {
+    Object.keys(state.heat).forEach(function (k) {
+      state.heat[k] *= 0.95;
+      if (state.heat[k] < 0.05) delete state.heat[k];
+    });
+  }
+
+  function handleCourtesyYield(state, intents) {
+    if (intents.length === 0) return;
+    var contendedTargets = {}; intents.forEach(function (i) { contendedTargets[i.toNode] = true; });
+    var occupiedNodes = {}; state.robots.forEach(function (r) { if (r.alive) occupiedNodes[r.node] = true; });
+    state.robots.forEach(function (robot) {
+      if (!robot.alive || robot.status !== "idle") return;
+      if (!contendedTargets[robot.node]) return;
+      robot.waitTicks += 1;
+      bumpHeat(state, robot.node, 0.4);
+      if (robot.waitTicks < 3) return;
+      var neighbors = state.warehouse.adjacency[robot.node] || [];
+      var free = neighbors.filter(function (n) { return !occupiedNodes[n] && !contendedTargets[n]; })[0];
+      robot.waitTicks = 0;
+      if (free !== undefined) {
+        robot.status = "moving"; robot.path = [free];
+        logMessage(state, "yield", robot.id, robot.name + " steps aside to clear a held-up aisle", { from: robot.node, to: free });
+      }
+    });
+  }
+
+  function resolveMovement(state) {
+    var intents = [];
+    state.robots.forEach(function (r) { var intent = publishIntent(r); if (intent) intents.push(intent); });
+    handleCourtesyYield(state, intents);
+    if (intents.length === 0) return;
+    var robotsById = {}; state.robots.forEach(function (r) { robotsById[r.id] = r; });
+    var movingIds = {}; intents.forEach(function (i) { movingIds[i.robotId] = true; });
+    var staticOccupied = {}; state.robots.forEach(function (r) { if (!movingIds[r.id]) staticOccupied[r.node] = true; });
+    var blocked = {};
+    intents.forEach(function (i) {
+      if (blocked[i.robotId]) return;
+      var opposite = intents.filter(function (j) { return j.robotId !== i.robotId && j.fromNode === i.toNode && j.toNode === i.fromNode; })[0];
+      if (opposite) {
+        var rA = robotsById[i.robotId], rB = robotsById[opposite.robotId];
+        var loser = rA.waitTicks === rB.waitTicks ? (rA.id > rB.id ? rA : rB) : rA.waitTicks < rB.waitTicks ? rA : rB;
+        blocked[loser.id] = true;
+      }
+    });
+    var byTarget = {};
+    intents.forEach(function (i) { (byTarget[i.toNode] = byTarget[i.toNode] || []).push(i); });
+    Object.keys(byTarget).forEach(function (target) {
+      var list = byTarget[target];
+      if (staticOccupied[target]) { list.forEach(function (i) { blocked[i.robotId] = true; }); return; }
+      if (list.length > 1) {
+        var winner = list[0];
+        list.forEach(function (i) { var r = robotsById[i.robotId], w = robotsById[winner.robotId]; if (r.waitTicks > w.waitTicks || (r.waitTicks === w.waitTicks && i.robotId < winner.robotId)) winner = i; });
+        list.forEach(function (i) { if (i.robotId !== winner.robotId) blocked[i.robotId] = true; });
+      }
+    });
+    var collisionsThisTick = 0;
+    intents.forEach(function (i) {
+      var robot = robotsById[i.robotId];
+      if (blocked[i.robotId]) {
+        robot.waitTicks += 1;
+        bumpHeat(state, robot.node, 1);
+        logMessage(state, "yield", robot.id, robot.name + " yields at node " + robot.node + " to avoid a conflict", { node: robot.node });
+        collisionsThisTick++;
+      } else { applyMove(robot); }
+    });
+    if (collisionsThisTick > 0) {
+      state.metrics.collisionsAvoided += collisionsThisTick;
+      logMessage(state, "collision-avoided", "system", collisionsThisTick + " potential collision" + (collisionsThisTick > 1 ? "s" : "") + " resolved via local yield", { count: collisionsThisTick });
+    }
+  }
+
+  function pruneOldTasks(state) {
+    var completed = state.tasks.filter(function (t) { return t.status === "completed"; });
+    if (completed.length > 20) {
+      var removeIds = {};
+      completed.slice(0, completed.length - 20).forEach(function (t) { removeIds[t.id] = true; });
+      state.tasks = state.tasks.filter(function (t) { return !removeIds[t.id]; });
+    }
+  }
+
+  function recomputeMetrics(state) {
+    var tasksCompleted = state.tasks.filter(function (t) { return t.status === "completed"; }).length;
+    var tasksInProgress = state.tasks.filter(function (t) { return t.status === "en_route_pickup" || t.status === "en_route_dropoff"; }).length;
+    var activeRobotCount = state.robots.filter(function (r) { return r.alive; }).length;
+    var urgentOpen = state.tasks.filter(function (t) { return t.urgent && t.status !== "completed"; }).length;
+    state.metrics.tick = state.tick;
+    state.metrics.tasksCompleted = tasksCompleted;
+    state.metrics.tasksInProgress = tasksInProgress;
+    state.metrics.activeRobotCount = activeRobotCount;
+    state.metrics.totalRobotCount = state.robots.length;
+    state.metrics.urgentOpen = urgentOpen;
+    state.metrics.throughput = state.throughput;
+    state.metrics.currentRate = state.throughput.length ? state.throughput[state.throughput.length - 1] : 0;
+  }
+
+  function updateThroughput(state) {
+    state._bucketTicks += 1;
+    state._bucketCompleted += state._justCompleted || 0;
+    if (state._bucketTicks >= state._bucketSize) {
+      state.throughput.push(state._bucketCompleted);
+      if (state.throughput.length > 30) state.throughput.shift();
+      state._bucketTicks = 0; state._bucketCompleted = 0;
+    }
+  }
+
+  function tick(state) {
+    state.tick += 1;
+    state._justCompleted = 0;
+    maybeAnnounceTask(state);
+    runAuctions(state);
+    checkArrivals(state);
+    handleBatteryAndCharging(state);
+    resolveMovement(state);
+    checkArrivals(state);
+    pruneOldTasks(state);
+    decayHeat(state);
+    updateThroughput(state);
+    recomputeMetrics(state);
+    return state;
+  }
+
+  function killRobot(state, robotId) {
+    var robot = state.robots.filter(function (r) { return r.id === robotId; })[0];
+    if (!robot || !robot.alive) return;
+    robot.alive = false; robot.status = "dead"; robot.path = [];
+    if (robot.taskId) {
+      var task = state.tasks.filter(function (t) { return t.id === robot.taskId; })[0];
+      if (task) {
+        task.status = "announced"; task.assignedTo = null; task.assignedTick = null; task.bids = []; task.createdTick = state.tick;
+        logMessage(state, "task-orphaned", "system", task.id + " orphaned by " + robot.name + "'s failure — re-announced", { taskId: task.id });
+      }
+      robot.taskId = null;
+    }
+    logMessage(state, "robot-killed", robot.id, robot.name + " taken offline — fleet must route around it", { node: robot.node });
+  }
+  function reviveRobot(state, robotId) {
+    var robot = state.robots.filter(function (r) { return r.id === robotId; })[0];
+    if (!robot || robot.alive) return;
+    robot.alive = true; robot.status = "idle"; robot.battery = Math.max(robot.battery, 60);
+    logMessage(state, "robot-revived", robot.id, robot.name + " back online", { node: robot.node });
+  }
+  function killTaskServer(state) {
+    if (!state.taskServerAlive) return;
+    state.taskServerAlive = false;
+    logMessage(state, "task-server-killed", "system", "Task server terminated — fleet keeps moving and finishing open work");
+  }
+  function reviveTaskServer(state) {
+    if (state.taskServerAlive) return;
+    state.taskServerAlive = true; state.nextTaskAt = state.tick + 3;
+    logMessage(state, "task-server-revived", "system", "Task server back online");
+  }
+
+  return {
+    createInitialState: createInitialState, tick: tick, createTask: createTask,
+    killRobot: killRobot, reviveRobot: reviveRobot, killTaskServer: killTaskServer, reviveTaskServer: reviveTaskServer
+  };
+});
+</script>
+
+<script>
+(function () {
+  "use strict";
+  var svgNS = "http://www.w3.org/2000/svg";
+  // Isometric (2:1) projection constants — turns the flat grid into an extruded 3D floor.
+  var HW = 27, HH = 14;          // half tile width / half tile height (screen px)
+  var RACK_H = 32;                // shelving extrusion height (px)
+  var ROBOT_ELEV = 15;            // robots float this many px "above" the floor plane
+  var TASK_PICKUP_ELEV = 13, TASK_DROPOFF_ELEV = 9;
+  var MARGIN_X = 60, MARGIN_TOP = 70, MARGIN_BOTTOM = 30;
+  var ORIGIN_X = 0, ORIGIN_Y = 0;
+
+  var SCENARIOS = {
+    fulfillment: {
+      label: "E-commerce fulfillment", robotLabel: "AMRs",
+      blurb: "Modeled on Amazon/Ocado-style fulfillment centers: totes shuttle from pick faces to pack stations non-stop. A wide, evenly-loaded fleet is what keeps pack-station queues short at peak.",
+      robotCount: 14, urgencyRatio: 0.15, taskMinGap: 10, taskMaxGap: 22, maxOpenTasks: 8
+    },
+    hospital: {
+      label: "Hospital logistics", robotLabel: "med-bots",
+      blurb: "Hospitals like UCSF run TUG-style robot fleets ferrying medication and supplies between pharmacy and wards. A STAT order has to cut the queue safely, with no human dispatcher in the loop at 3am.",
+      robotCount: 8, urgencyRatio: 0.4, taskMinGap: 8, taskMaxGap: 18, maxOpenTasks: 5
+    },
+    port: {
+      label: "Port / container yard", robotLabel: "AGVs",
+      blurb: "Automated ports (Rotterdam, Qingdao) run AGV fleets moving containers between stacks and quay cranes 24/7 — dozens of vehicles sharing a handful of lanes, zero tolerance for a central dispatcher going down.",
+      robotCount: 16, urgencyRatio: 0.08, taskMinGap: 16, taskMaxGap: 30, maxOpenTasks: 10
+    },
+    manufacturing: {
+      label: "Manufacturing line", robotLabel: "line-bots",
+      blurb: "Just-in-time assembly lines feed kitted parts to assembly cells on demand — this pattern replaces a fixed conveyor with a fleet that reroutes itself around a jam instead of stalling the line.",
+      robotCount: 10, urgencyRatio: 0.22, taskMinGap: 6, taskMaxGap: 14, maxOpenTasks: 6
+    },
+    disaster: {
+      label: "Disaster response", robotLabel: "rescue-bots",
+      blurb: "In a disaster zone there's no reliable central network to depend on, so peer-to-peer coordination isn't a nice-to-have — it's the only option. Most tasks here are urgent by definition.",
+      robotCount: 12, urgencyRatio: 0.55, taskMinGap: 10, taskMaxGap: 20, maxOpenTasks: 7
+    }
+  };
+  var currentScenarioId = "fulfillment";
+
+  var state = Sim.createInitialState(SCENARIOS[currentScenarioId]);
+  var running = true;
+  var tickMs = 380;
+  var timer = null;
+  var existsMap = {};
+  state.warehouse.nodes.forEach(function (n) { existsMap[n.x + "," + n.y] = true; });
+
+  function isoPixel(gx, gy, elevationPx) {
+    return {
+      x: ORIGIN_X + (gx - gy) * HW,
+      y: ORIGIN_Y + (gx + gy) * HH - (elevationPx || 0)
+    };
+  }
+  function nodePixel(nodeId) {
+    var n = state.warehouse.nodes[nodeId];
+    return isoPixel(n.x, n.y, 0);
+  }
+  function el(tag, attrs) {
+    var e = document.createElementNS(svgNS, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+
+  var svgEl = document.getElementById("warehouse-svg");
+  var layerRacks = document.getElementById("layer-racks");
+  var layerLanes = document.getElementById("layer-lanes");
+  var layerHeat = document.getElementById("layer-heat");
+  var layerNodes = document.getElementById("layer-nodes");
+  var layerTasks = document.getElementById("layer-tasks");
+  var layerRobots = document.getElementById("layer-robots");
+
+  function polyPts(pts) {
+    return pts.map(function (p) { return p.x.toFixed(1) + "," + p.y.toFixed(1); }).join(" ");
+  }
+
+  function buildStaticFloor() {
+    var cols = state.warehouse.cols, rows = state.warehouse.rows;
+    // Compute origin so the whole isometric diamond (plus rack extrusion) sits inside the viewBox.
+    ORIGIN_X = MARGIN_X + (rows - 1) * HW;
+    ORIGIN_Y = MARGIN_TOP + RACK_H;
+    var w = MARGIN_X * 2 + (cols - 1 + rows - 1) * HW;
+    var h = MARGIN_TOP + RACK_H + MARGIN_BOTTOM + (cols - 1 + rows - 1) * HH;
+    svgEl.setAttribute("viewBox", "0 0 " + w + " " + h);
+
+    layerRacks.innerHTML = ""; layerLanes.innerHTML = ""; layerNodes.innerHTML = "";
+
+    // Ground plane: a faint diamond tile under every rack footprint AND every path node,
+    // so the whole floor reads as one contiguous surface before racks are extruded on top.
+    var RS = 0.44;
+    for (var y = 0; y < rows; y++) {
+      for (var x = 0; x < cols; x++) {
+        var n0 = isoPixel(x, y - RS, 0), e0 = isoPixel(x + RS, y, 0), s0 = isoPixel(x, y + RS, 0), w0 = isoPixel(x - RS, y, 0);
+        layerRacks.appendChild(el("polygon", { class: "floor-tile", points: polyPts([n0, e0, s0, w0]) }));
+      }
+    }
+
+    // Rack boxes: painter's-algorithm back-to-front by (x+y) so nearer boxes overlap correctly.
+    var rackCells = [];
+    for (var ry = 0; ry < rows; ry++) {
+      for (var rx = 0; rx < cols; rx++) {
+        if (existsMap[rx + "," + ry]) continue;
+        rackCells.push({ x: rx, y: ry });
+      }
+    }
+    rackCells.sort(function (a, b) { return (a.x + a.y) - (b.x + b.y); });
+    rackCells.forEach(function (c) {
+      var nT = isoPixel(c.x, c.y - RS, RACK_H), eT = isoPixel(c.x + RS, c.y, RACK_H),
+          sT = isoPixel(c.x, c.y + RS, RACK_H), wT = isoPixel(c.x - RS, c.y, RACK_H);
+      var e0 = isoPixel(c.x + RS, c.y, 0), s0 = isoPixel(c.x, c.y + RS, 0), w0 = isoPixel(c.x - RS, c.y, 0);
+      var g = el("g", { class: "rack-group" });
+      g.appendChild(el("polygon", { class: "rack-side-l", points: polyPts([sT, wT, w0, s0]), fill: "var(--border-strong)", "fill-opacity": "0.55" }));
+      g.appendChild(el("polygon", { class: "rack-side-r", points: polyPts([eT, sT, s0, e0]), fill: "var(--ink-soft)", "fill-opacity": "0.28" }));
+      g.appendChild(el("polygon", { class: "rack-top", points: polyPts([nT, eT, sT, wT]) }));
+      layerRacks.appendChild(g);
+    });
+
+    state.warehouse.edges.forEach(function (edge) {
+      var a = nodePixel(edge.from), b = nodePixel(edge.to);
+      layerLanes.appendChild(el("line", { class: "lane", x1: a.x, y1: a.y, x2: b.x, y2: b.y }));
+      layerLanes.appendChild(el("line", { class: "lane-mark", x1: a.x, y1: a.y, x2: b.x, y2: b.y }));
+    });
+
+    state.warehouse.nodes.forEach(function (n) {
+      var p = isoPixel(n.x, n.y, 0);
+      if (n.kind === "chokepoint") {
+        var gch = el("g", { class: "node-chokepoint" });
+        gch.appendChild(el("ellipse", { class: "node-shadow", cx: p.x, cy: p.y + 1, rx: 6, ry: 3 }));
+        gch.appendChild(el("circle", { class: "mark", cx: p.x, cy: p.y, r: 5 }));
+        layerNodes.appendChild(gch);
+      } else if (n.kind === "dock") {
+        var pe = isoPixel(n.x, n.y, 8);
+        var g = el("g", { class: "node-dock" });
+        g.appendChild(el("ellipse", { class: "node-shadow", cx: p.x, cy: p.y + 1, rx: 8, ry: 4 }));
+        g.appendChild(el("line", { x1: p.x, y1: p.y, x2: pe.x, y2: pe.y, stroke: "var(--orange)", "stroke-width": 1.1, opacity: 0.5 }));
+        g.appendChild(el("rect", { x: pe.x - 6.5, y: pe.y - 6.5, width: 13, height: 13, rx: 2 }));
+        var t = el("text", { x: pe.x, y: pe.y + (n.y === 0 ? -11 : 17), "text-anchor": "middle" });
+        t.textContent = "DOCK"; g.appendChild(t);
+        layerNodes.appendChild(g);
+      } else if (n.kind === "charge") {
+        var pce = isoPixel(n.x, n.y, 8);
+        var gc = el("g", { class: "node-charge" });
+        gc.appendChild(el("ellipse", { class: "node-shadow", cx: p.x, cy: p.y + 1, rx: 8, ry: 4 }));
+        gc.appendChild(el("line", { x1: p.x, y1: p.y, x2: pce.x, y2: pce.y, stroke: "var(--amber)", "stroke-width": 1.1, opacity: 0.5 }));
+        gc.appendChild(el("circle", { class: "mark", cx: pce.x, cy: pce.y, r: 7.5 }));
+        gc.appendChild(el("path", { d: "M " + (pce.x + 1.4) + " " + (pce.y - 4.6) + " L " + (pce.x - 2.8) + " " + (pce.y + 0.9) + " L " + pce.x + " " + (pce.y + 0.9) + " L " + (pce.x - 1.4) + " " + (pce.y + 4.6) + " L " + (pce.x + 3.2) + " " + (pce.y - 0.9) + " L " + pce.x + " " + (pce.y - 0.9) + " Z" }));
+        var tc = el("text", { x: pce.x, y: pce.y + (n.y === 0 ? -12 : 19), "text-anchor": "middle" });
+        tc.textContent = "CHARGE"; gc.appendChild(tc);
+        layerNodes.appendChild(gc);
+      } else {
+        layerNodes.appendChild(el("circle", { class: "node-aisle", cx: p.x, cy: p.y, r: 2.4 }));
+      }
+    });
+  }
+
+  var robotEls = {};
+  function buildRobots() {
+    layerRobots.innerHTML = "";
+    robotEls = {};
+    state.robots.forEach(function (r) {
+      var p = isoPixel(state.warehouse.nodes[r.node].x, state.warehouse.nodes[r.node].y, ROBOT_ELEV);
+      var g = el("g", { class: "robot idle", transform: "translate(" + p.x + "," + p.y + ")" });
+      g.appendChild(el("ellipse", { class: "robot-shadow", cx: 0, cy: ROBOT_ELEV, rx: 9, ry: 4.2 }));
+      var lift = el("g", { class: "robot-lift" });
+      lift.appendChild(el("circle", { class: "ring", r: 11.8 }));
+      lift.appendChild(el("circle", { class: "body", r: 8.6, fill: r.color }));
+      var label = el("text", { class: "label", y: 0.5 });
+      label.textContent = r.id.replace("r", "");
+      lift.appendChild(label);
+      var dead = el("g", { class: "dead-mark" });
+      dead.appendChild(el("line", { x1: -5, y1: -5, x2: 5, y2: 5 }));
+      dead.appendChild(el("line", { x1: -5, y1: 5, x2: 5, y2: -5 }));
+      lift.appendChild(dead);
+      g.appendChild(lift);
+      layerRobots.appendChild(g);
+      robotEls[r.id] = g;
+    });
+  }
+
+  function updateRobots() {
+    // Re-append in back-to-front grid order so nearer robots overlap farther ones correctly.
+    var ordered = state.robots.slice().sort(function (a, b) {
+      var na = state.warehouse.nodes[a.node], nb = state.warehouse.nodes[b.node];
+      return (na.x + na.y) - (nb.x + nb.y);
+    });
+    ordered.forEach(function (r) {
+      var g = robotEls[r.id];
+      var n = state.warehouse.nodes[r.node];
+      var p = isoPixel(n.x, n.y, ROBOT_ELEV);
+      g.setAttribute("transform", "translate(" + p.x.toFixed(1) + "," + p.y.toFixed(1) + ")");
+      g.setAttribute("class", "robot " + r.status);
+      layerRobots.appendChild(g);
+    });
+  }
+
+  function updateTaskMarkers() {
+    layerTasks.innerHTML = "";
+    state.tasks.forEach(function (t) {
+      if (t.status === "completed") return;
+      var robot = t.assignedTo ? state.robots.filter(function (r) { return r.id === t.assignedTo; })[0] : null;
+      var color = robot ? robot.color : "var(--text-muted)";
+      var pn = state.warehouse.nodes[t.pickup], dn = state.warehouse.nodes[t.dropoff];
+      if (t.status === "announced" || t.status === "en_route_pickup") {
+        var ppGround = isoPixel(pn.x, pn.y, 0);
+        var pp = isoPixel(pn.x, pn.y, TASK_PICKUP_ELEV);
+        var gp = el("g", { class: "task-marker-group" });
+        gp.appendChild(el("ellipse", { class: "task-shadow", cx: ppGround.x, cy: ppGround.y + 1, rx: 5, ry: 2.4 }));
+        gp.appendChild(el("polygon", {
+          class: "task-marker-pickup" + (t.urgent ? " urgent" : ""),
+          points: (pp.x) + "," + (pp.y - 7) + " " + (pp.x - 6) + "," + (pp.y + 4.5) + " " + (pp.x + 6) + "," + (pp.y + 4.5),
+          stroke: color
+        }));
+        layerTasks.appendChild(gp);
+      }
+      if (t.status === "en_route_pickup" || t.status === "en_route_dropoff") {
+        var dpGround = isoPixel(dn.x, dn.y, 0);
+        var dp = isoPixel(dn.x, dn.y, TASK_DROPOFF_ELEV);
+        var gd = el("g", { class: "task-marker-group" });
+        gd.appendChild(el("ellipse", { class: "task-shadow", cx: dpGround.x, cy: dpGround.y + 1, rx: 5, ry: 2.4 }));
+        gd.appendChild(el("rect", { class: "task-marker-dropoff", x: dp.x - 5.5, y: dp.y - 5.5, width: 11, height: 11, stroke: color }));
+        layerTasks.appendChild(gd);
+      }
+      if (robot) {
+        var target = t.status === "en_route_pickup" ? t.pickup : t.dropoff;
+        var tnode = state.warehouse.nodes[target];
+        var rp = isoPixel(state.warehouse.nodes[robot.node].x, state.warehouse.nodes[robot.node].y, ROBOT_ELEV);
+        var tp = isoPixel(tnode.x, tnode.y, t.status === "en_route_pickup" ? TASK_PICKUP_ELEV : TASK_DROPOFF_ELEV);
+        layerTasks.appendChild(el("line", { class: "task-link", x1: rp.x, y1: rp.y, x2: tp.x, y2: tp.y, stroke: color }));
+      }
+    });
+  }
+
+  function renderHeat() {
+    layerHeat.innerHTML = "";
+    Object.keys(state.heat).forEach(function (k) {
+      var v = state.heat[k];
+      if (v < 0.6) return;
+      var n = state.warehouse.nodes[+k];
+      var p = isoPixel(n.x, n.y, 0.5);
+      var opacity = Math.min(0.5, v / 18);
+      var rx = 8 + Math.min(9, v / 3);
+      layerHeat.appendChild(el("ellipse", { class: "heat-cell", cx: p.x, cy: p.y, rx: rx.toFixed(1), ry: (rx * 0.52).toFixed(1), fill: "var(--orange)", opacity: opacity.toFixed(2) }));
+    });
+  }
+
+  // ---- side panels ----
+  var fleetList = document.getElementById("fleet-list");
+  var taskList = document.getElementById("task-list");
+  var logList = document.getElementById("log-list");
+  var fleetCount = document.getElementById("fleet-count");
+  var fleetLabel = document.getElementById("fleet-label");
+  var taskCount = document.getElementById("task-count");
+  var tickValue = document.getElementById("tick-value");
+  var metricsEl = document.getElementById("metrics");
+  var floorCount = document.getElementById("floor-count");
+  var scenarioSelect = document.getElementById("scenario-select");
+  var scenarioBlurb = document.getElementById("scenario-blurb");
+
+  function batteryColor(b) {
+    if (b < 20) return "var(--orange)";
+    if (b < 50) return "var(--amber)";
+    return "var(--teal)";
+  }
+  function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+  function renderFleet() {
+    var html = "";
+    var aliveCount = 0;
+    state.robots.forEach(function (r) {
+      if (r.alive) aliveCount++;
+      var pillClass = "pill-" + r.status;
+      html += '<div class="robot-row">' +
+        '<span class="robot-dot" style="background:' + r.color + '"></span>' +
+        '<span class="robot-name" title="' + r.name + '">' + r.id.toUpperCase() + "</span>" +
+        '<span class="robot-node">@' + r.node + "</span>" +
+        '<div class="battery-track"><div class="battery-fill" style="width:' + Math.round(r.battery) + '%;background:' + batteryColor(r.battery) + '"></div></div>' +
+        '<span class="battery-pct">' + Math.round(r.battery) + '%</span>' +
+        '<span class="pill ' + pillClass + '">' + r.status + "</span>" +
+        (r.alive
+          ? '<button class="row-btn danger" data-action="kill" data-robot="' + r.id + '">Kill</button>'
+          : '<button class="row-btn on" data-action="revive" data-robot="' + r.id + '">Revive</button>') +
+        "</div>";
+    });
+    fleetList.innerHTML = html;
+    fleetCount.textContent = aliveCount + "/" + state.robots.length + " active";
+  }
+
+  function renderTasks() {
+    var open = state.tasks.filter(function (t) { return t.status !== "completed"; });
+    var recentDone = state.tasks.filter(function (t) { return t.status === "completed"; }).slice(-3);
+    var shown = open.concat(recentDone);
+    taskCount.textContent = open.length + " open";
+    if (shown.length === 0) {
+      taskList.innerHTML = '<div class="empty-note">No tasks yet — the task server announces the first one in a few ticks.</div>';
+      return;
+    }
+    var html = "";
+    shown.slice(-10).forEach(function (t) {
+      var robot = t.assignedTo ? state.robots.filter(function (r) { return r.id === t.assignedTo; })[0] : null;
+      var pillClass = t.status === "completed" ? "pill-idle" : t.status === "announced" ? "pill-announced" : t.status === "en_route_pickup" ? "pill-pickup" : "pill-dropoff";
+      var label = t.status.replace(/_/g, " ");
+      html += '<div class="task-row">' +
+        '<div class="task-top"><span class="task-id">' + t.id + '</span><span class="badges">' + (t.urgent ? '<span class="pill pill-urgent">urgent</span>' : '') + '<span class="pill ' + pillClass + '">' + label + '</span></span></div>' +
+        '<div class="task-route"><span>@' + t.pickup + " → @" + t.dropoff + "</span><span>" + (robot ? robot.name : "bidding…") + "</span></div>" +
+        "</div>";
+    });
+    taskList.innerHTML = html;
+  }
+
+  function renderLog() {
+    var pinned = logList.scrollTop + logList.clientHeight >= logList.scrollHeight - 30;
+    var recent = state.messages.slice(-60);
+    var html = "";
+    recent.forEach(function (m) {
+      html += '<div class="log-line t-' + m.type + '"><span class="log-tick">' + m.tick + '</span><span class="log-text">' + m.text + "</span></div>";
+    });
+    logList.innerHTML = html || '<div class="empty-note">Waiting for the first tick…</div>';
+    if (pinned) logList.scrollTop = logList.scrollHeight;
+  }
+
+  function renderSparkline(m) {
+    var data = (m.throughput || []).slice(-16);
+    if (data.length === 0) data = [0];
+    var max = 1;
+    data.forEach(function (v) { if (v > max) max = v; });
+    var w = 160, h = 32, gap = 2, n = data.length;
+    var barW = Math.max(2, (w - gap * (n - 1)) / n);
+    var bars = "";
+    data.forEach(function (v, i) {
+      var bh = Math.max(2, (v / max) * (h - 2));
+      var x = i * (barW + gap);
+      var y = h - bh;
+      bars += '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + barW.toFixed(1) + '" height="' + bh.toFixed(1) + '" rx="1.4" fill="var(--teal)"><title>' + v + ' tasks / 20 ticks</title></rect>';
+    });
+    return '<svg class="spark-svg" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none" role="img" aria-label="Throughput sparkline">' + bars + "</svg>";
+  }
+
+  function renderMetrics() {
+    var m = state.metrics;
+    var tiles = [
+      { label: "Tick", value: m.tick, cls: "" },
+      { label: "Active robots", value: m.activeRobotCount + "/" + m.totalRobotCount, cls: m.activeRobotCount < m.totalRobotCount ? "warn" : "good" },
+      { label: "Tasks completed", value: m.tasksCompleted, cls: "good" },
+      { label: "Urgent open", value: m.urgentOpen, cls: m.urgentOpen > 0 ? "warn" : "" },
+      { label: "Local yields resolved", value: m.collisionsAvoided, cls: "" },
+      { label: "Task server", value: state.taskServerAlive ? "online" : "offline", cls: state.taskServerAlive ? "good" : "warn" }
+    ];
+    var html = tiles.map(function (t) {
+      return '<div class="metric-tile"><div class="label">' + t.label + '</div><div class="value ' + t.cls + '">' + t.value + "</div></div>";
+    }).join("");
+    html += '<div class="metric-tile wide"><div class="label">Throughput <span class="mono" style="font-weight:400;">(tasks / 20 ticks)</span></div>' +
+      '<div class="spark-wrap"><span class="spark-value mono">' + m.currentRate + '</span>' + renderSparkline(m) + "</div></div>";
+    metricsEl.innerHTML = html;
+  }
+
+  function render() {
+    tickValue.textContent = state.tick;
+    updateRobots();
+    updateTaskMarkers();
+    renderHeat();
+    renderFleet();
+    renderTasks();
+    renderLog();
+    renderMetrics();
+  }
+
+  fleetList.addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-action]");
+    if (!btn) return;
+    var id = btn.getAttribute("data-robot");
+    if (btn.getAttribute("data-action") === "kill") Sim.killRobot(state, id);
+    else Sim.reviveRobot(state, id);
+    render();
+  });
+
+  var btnStart = document.getElementById("btn-start");
+  var btnReset = document.getElementById("btn-reset");
+  var btnAddTask = document.getElementById("btn-add-task");
+  var btnKillServer = document.getElementById("btn-kill-server");
+
+  function loop() { Sim.tick(state); render(); }
+  function startLoop() { if (timer) clearInterval(timer); timer = setInterval(loop, tickMs); }
+  function stopLoop() { if (timer) clearInterval(timer); timer = null; }
+
+  function afterStateReady() {
+    var cfg = SCENARIOS[currentScenarioId];
+    scenarioBlurb.innerHTML = "<strong>" + cfg.label + ":</strong> " + cfg.blurb;
+    fleetLabel.textContent = "Fleet — " + cap(cfg.robotLabel);
+    floorCount.textContent = state.warehouse.cols + " × " + state.warehouse.rows + " grid · " + state.robots.length + " " + cfg.robotLabel;
+    render();
+  }
+
+  function applyScenario(id) {
+    stopLoop();
+    currentScenarioId = id;
+    state = Sim.createInitialState(SCENARIOS[id]);
+    buildRobots();
+    afterStateReady();
+    running = true; btnStart.textContent = "Pause"; startLoop();
+  }
+
+  btnStart.addEventListener("click", function () {
+    running = !running;
+    btnStart.textContent = running ? "Pause" : "Resume";
+    if (running) startLoop(); else stopLoop();
+  });
+  btnReset.addEventListener("click", function () { applyScenario(currentScenarioId); });
+  btnAddTask.addEventListener("click", function () { Sim.createTask(state); render(); });
+  btnKillServer.addEventListener("click", function () {
+    if (state.taskServerAlive) { Sim.killTaskServer(state); btnKillServer.textContent = "Revive task server"; btnKillServer.className = "on"; }
+    else { Sim.reviveTaskServer(state); btnKillServer.textContent = "Kill task server"; btnKillServer.className = "danger"; }
+    render();
+  });
+  scenarioSelect.addEventListener("change", function (e) { applyScenario(e.target.value); });
+
+  ["speed-1x", "speed-2x", "speed-4x"].forEach(function (id) {
+    document.getElementById(id).addEventListener("click", function (e) {
+      tickMs = +e.target.getAttribute("data-speed");
+      document.documentElement.style.setProperty("--tick-ms", tickMs + "ms");
+      ["speed-1x", "speed-2x", "speed-4x"].forEach(function (i2) { document.getElementById(i2).classList.remove("on"); });
+      e.target.classList.add("on");
+      if (running) startLoop();
+    });
+  });
+
+  document.documentElement.style.setProperty("--tick-ms", tickMs + "ms");
+  scenarioSelect.value = currentScenarioId;
+  buildStaticFloor();
+  buildRobots();
+  afterStateReady();
+  startLoop();
+})();
+</script>
+
+
+</body></html>

@@ -26,6 +26,35 @@ python edge_infer.py              # streams real inference latency to the dashbo
 
 ---
 
+## Zero-install live demo (share this link)
+
+`docs/index.html` is a second, completely standalone build of the same
+coordination algorithm — no `npm install`, no server, no build step. It's
+one self-contained HTML file: the sim engine (auction, pathfinding, local
+collision rule, kill-switch, all five real-world scenario presets) ported
+to plain JS and an isometric SVG warehouse renderer, both inlined in the
+page.
+
+Two ways to hand someone a working link:
+
+1. **GitHub Pages (recommended for sharing)** — in this repo on GitHub:
+   **Settings → Pages → Build and deployment → Source: "Deploy from a
+   branch" → Branch: `main`, folder: `/docs` → Save.** GitHub serves it at
+   `https://<your-username>.github.io/<repo-name>/` a minute or two later —
+   share that URL and it just works, live, for anyone.
+2. **No hosting at all** — clone or download the repo and open
+   `docs/index.html` directly in any browser (double-click it). It's a
+   plain static file with no server dependency, so it runs the same way
+   offline.
+
+This is a faithful port for demo purposes (see the page's own "Honest
+simplification" note): identical bidding/collision/kill-switch logic to
+`lib/simulation/*.ts`, running in one browser tab instead of the real
+Next.js + WebSocket server. For the literal multi-process/real-transport
+build, run the full app above or `npm run demo:distributed`.
+
+---
+
 ## What you're looking at
 
 Three moving parts, deliberately kept separate so the "no single point of
