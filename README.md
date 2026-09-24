@@ -1,5 +1,7 @@
 # EdgeFleet
 
+> **Live demo (runs in your browser, nothing to install):** https://nehal-s-devlr.github.io/edge-fleet/
+
 A working Round-1 prototype for **SIH26123 — Edge-AI Based Distributed Fleet
 Coordination for AMRs in Smart Warehouses.** A live multi-robot simulation
 with decentralized task bidding, local collision avoidance, a real onboard
